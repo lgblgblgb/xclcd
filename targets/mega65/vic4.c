@@ -50,7 +50,7 @@ Uint8 c128_d030_reg;					// C128-like register can be only accessed in VIC-II mo
 static Uint8 reg_d018_screen_addr = 0;     // Legacy VIC-II $D018 screen address register
 static int vic_hotreg_touched = 0; 		// If any "legacy" registers were touched
 static int vic4_sideborder_touched = 0;  // If side-border register were touched
-static int border_x_left= 0;			 // Side border left 
+static int border_x_left= 0;			 // Side border left
 static int border_x_right= 0;			 // Side border right
 static int xcounter = 0, ycounter = 0;   // video counters
 static int frame_counter = 0;
@@ -58,7 +58,7 @@ static int char_row = 0, display_row = 0;
 static Uint8 bg_pixel_state[1024]; 		// See FOREGROUND_PIXEL and BACKGROUND_PIXEL constants
 static Uint8* screen_ram_current_ptr = NULL;
 static Uint8* colour_ram_current_ptr = NULL;
-extern int user_scanlines_setting;
+int user_scanlines_setting = 0;
 float char_x_step = 0.0;
 static int enable_bg_paint = 1;
 static int display_row_count = 0;
@@ -120,44 +120,46 @@ static inline void PIXEL_POINTER_FINAL_ASSERT ( Uint32 *p )
 
 // Lookup-based bit reversal.  (TODO: Move this to a proper file)
 
-static inline Uint8 reverse_byte(unsigned char x)
-{
-    static const Uint8 table[] = {
-        0x00, 0x80, 0x40, 0xc0, 0x20, 0xa0, 0x60, 0xe0, //0
-        0x10, 0x90, 0x50, 0xd0, 0x30, 0xb0, 0x70, 0xf0, //8
-        0x08, 0x88, 0x48, 0xc8, 0x28, 0xa8, 0x68, 0xe8, //16
-        0x18, 0x98, 0x58, 0xd8, 0x38, 0xb8, 0x78, 0xf8, //24
-        0x04, 0x84, 0x44, 0xc4, 0x24, 0xa4, 0x64, 0xe4, //32
-        0x14, 0x94, 0x54, 0xd4, 0x34, 0xb4, 0x74, 0xf4, //40
-        0x0c, 0x8c, 0x4c, 0xcc, 0x2c, 0xac, 0x6c, 0xec, //48
-        0x1c, 0x9c, 0x5c, 0xdc, 0x3c, 0xbc, 0x7c, 0xfc, //56
-        0x02, 0x82, 0x42, 0xc2, 0x22, 0xa2, 0x62, 0xe2, //64
-        0x12, 0x92, 0x52, 0xd2, 0x32, 0xb2, 0x72, 0xf2, //72
-        0x0a, 0x8a, 0x4a, 0xca, 0x2a, 0xaa, 0x6a, 0xea, //80
-        0x1a, 0x9a, 0x5a, 0xda, 0x3a, 0xba, 0x7a, 0xfa, //88
-        0x06, 0x86, 0x46, 0xc6, 0x26, 0xa6, 0x66, 0xe6, //96
-        0x16, 0x96, 0x56, 0xd6, 0x36, 0xb6, 0x76, 0xf6, //104
-        0x0e, 0x8e, 0x4e, 0xce, 0x2e, 0xae, 0x6e, 0xee, //112
-        0x1e, 0x9e, 0x5e, 0xde, 0x3e, 0xbe, 0x7e, 0xfe, //120
-        0x01, 0x81, 0x41, 0xc1, 0x21, 0xa1, 0x61, 0xe1, //128
-        0x11, 0x91, 0x51, 0xd1, 0x31, 0xb1, 0x71, 0xf1,
-        0x09, 0x89, 0x49, 0xc9, 0x29, 0xa9, 0x69, 0xe9,
-        0x19, 0x99, 0x59, 0xd9, 0x39, 0xb9, 0x79, 0xf9,
-        0x05, 0x85, 0x45, 0xc5, 0x25, 0xa5, 0x65, 0xe5,
-        0x15, 0x95, 0x55, 0xd5, 0x35, 0xb5, 0x75, 0xf5,
-        0x0d, 0x8d, 0x4d, 0xcd, 0x2d, 0xad, 0x6d, 0xed,
-        0x1d, 0x9d, 0x5d, 0xdd, 0x3d, 0xbd, 0x7d, 0xfd,
-        0x03, 0x83, 0x43, 0xc3, 0x23, 0xa3, 0x63, 0xe3,
-        0x13, 0x93, 0x53, 0xd3, 0x33, 0xb3, 0x73, 0xf3,
-        0x0b, 0x8b, 0x4b, 0xcb, 0x2b, 0xab, 0x6b, 0xeb,
-        0x1b, 0x9b, 0x5b, 0xdb, 0x3b, 0xbb, 0x7b, 0xfb,
-        0x07, 0x87, 0x47, 0xc7, 0x27, 0xa7, 0x67, 0xe7,
-        0x17, 0x97, 0x57, 0xd7, 0x37, 0xb7, 0x77, 0xf7,
-        0x0f, 0x8f, 0x4f, 0xcf, 0x2f, 0xaf, 0x6f, 0xef,
-        0x1f, 0x9f, 0x5f, 0xdf, 0x3f, 0xbf, 0x7f, 0xff,
-    };
-    return table[x];
-}
+static const Uint8 reverse_byte_table[] = {
+	0x00, 0x80, 0x40, 0xc0, 0x20, 0xa0, 0x60, 0xe0,	//0
+	0x10, 0x90, 0x50, 0xd0, 0x30, 0xb0, 0x70, 0xf0,	//8
+	0x08, 0x88, 0x48, 0xc8, 0x28, 0xa8, 0x68, 0xe8,	//16
+	0x18, 0x98, 0x58, 0xd8, 0x38, 0xb8, 0x78, 0xf8,	//24
+	0x04, 0x84, 0x44, 0xc4, 0x24, 0xa4, 0x64, 0xe4,	//32
+	0x14, 0x94, 0x54, 0xd4, 0x34, 0xb4, 0x74, 0xf4,	//40
+	0x0c, 0x8c, 0x4c, 0xcc, 0x2c, 0xac, 0x6c, 0xec,	//48
+	0x1c, 0x9c, 0x5c, 0xdc, 0x3c, 0xbc, 0x7c, 0xfc,	//56
+	0x02, 0x82, 0x42, 0xc2, 0x22, 0xa2, 0x62, 0xe2,	//64
+	0x12, 0x92, 0x52, 0xd2, 0x32, 0xb2, 0x72, 0xf2,	//72
+	0x0a, 0x8a, 0x4a, 0xca, 0x2a, 0xaa, 0x6a, 0xea,	//80
+	0x1a, 0x9a, 0x5a, 0xda, 0x3a, 0xba, 0x7a, 0xfa,	//88
+	0x06, 0x86, 0x46, 0xc6, 0x26, 0xa6, 0x66, 0xe6,	//96
+	0x16, 0x96, 0x56, 0xd6, 0x36, 0xb6, 0x76, 0xf6,	//104
+	0x0e, 0x8e, 0x4e, 0xce, 0x2e, 0xae, 0x6e, 0xee,	//112
+	0x1e, 0x9e, 0x5e, 0xde, 0x3e, 0xbe, 0x7e, 0xfe,	//120
+	0x01, 0x81, 0x41, 0xc1, 0x21, 0xa1, 0x61, 0xe1,	//128
+	0x11, 0x91, 0x51, 0xd1, 0x31, 0xb1, 0x71, 0xf1,
+	0x09, 0x89, 0x49, 0xc9, 0x29, 0xa9, 0x69, 0xe9,
+	0x19, 0x99, 0x59, 0xd9, 0x39, 0xb9, 0x79, 0xf9,
+	0x05, 0x85, 0x45, 0xc5, 0x25, 0xa5, 0x65, 0xe5,
+	0x15, 0x95, 0x55, 0xd5, 0x35, 0xb5, 0x75, 0xf5,
+	0x0d, 0x8d, 0x4d, 0xcd, 0x2d, 0xad, 0x6d, 0xed,
+	0x1d, 0x9d, 0x5d, 0xdd, 0x3d, 0xbd, 0x7d, 0xfd,
+	0x03, 0x83, 0x43, 0xc3, 0x23, 0xa3, 0x63, 0xe3,
+	0x13, 0x93, 0x53, 0xd3, 0x33, 0xb3, 0x73, 0xf3,
+	0x0b, 0x8b, 0x4b, 0xcb, 0x2b, 0xab, 0x6b, 0xeb,
+	0x1b, 0x9b, 0x5b, 0xdb, 0x3b, 0xbb, 0x7b, 0xfb,
+	0x07, 0x87, 0x47, 0xc7, 0x27, 0xa7, 0x67, 0xe7,
+	0x17, 0x97, 0x57, 0xd7, 0x37, 0xb7, 0x77, 0xf7,
+	0x0f, 0x8f, 0x4f, 0xcf, 0x2f, 0xaf, 0x6f, 0xef,
+	0x1f, 0x9f, 0x5f, 0xdf, 0x3f, 0xbf, 0x7f, 0xff,
+};
+
+//static XEMU_INLINE Uint8 reverse_byte ( unsigned char x )
+//{
+//	return reverse_byte_table[x];
+//}
+#define reverse_byte(x) reverse_byte_table[(x) & 0xFF];
 
 
 void vic_init ( void )
@@ -177,7 +179,7 @@ void vic_init ( void )
 	}
 	c128_d030_reg = 0xFE;	// this may be set to 2MHz in the previous step, so be sure to set to FF here, BUT FIX: bit 0 should be inverted!!
 	machine_set_speed(0);
-	
+
 	screen_ram_current_ptr = main_ram + SCREEN_ADDR;
 	colour_ram_current_ptr = colour_ram;
 
@@ -190,14 +192,13 @@ void vic4_switch_display_mode(int ntsc)
 {
 	DEBUGPRINT("VIC: switch_display_mode NTSC=%d" NL, ntsc);
 	xemu_change_display_mode(SCREEN_WIDTH, ntsc ? PHYSICAL_RASTERS_NTSC : PHYSICAL_RASTERS_PAL,	// texture sizes
-		SCREEN_WIDTH, SCREEN_HEIGHT,// logical size (used with keeping aspect ratio by the SDL render stuffs)
-		SCREEN_WIDTH, SCREEN_HEIGHT,// window size
+		SCREEN_WIDTH, SCREEN_HEIGHT,	// logical size (used with keeping aspect ratio by the SDL render stuffs)
+		SCREEN_WIDTH, SCREEN_HEIGHT,	// window size
 		SCREEN_FORMAT,
-		USE_LOCKED_TEXTURE);
-
+		USE_LOCKED_TEXTURE
+	);
 	if(!xemucfg_get_bool("fullborders"))
 		xemu_set_viewport(48, 32, SCREEN_WIDTH - 48, SCREEN_HEIGHT, 1);
-
 	vic4_open_frame_access();
 }
 
@@ -210,6 +211,7 @@ void vic4_open_frame_access()
 	if (tail_sdl)
 		FATAL("tail_sdl is not zero!");
 }
+
 
 static void vic4_interrupt_checker ( void )
 {
@@ -231,20 +233,22 @@ static void vic4_interrupt_checker ( void )
 	}
 }
 
+
 static void vic4_check_raster_interrupt(int nraster)
 {
 	if (nraster == compare_raster)
 		interrupt_status |= 1;
 	else
 		interrupt_status &= 0xFE;
-
 	vic4_interrupt_checker();
 }
+
 
 inline static void vic4_calculate_char_x_step()
 {
 	char_x_step = (REG_CHARXSCALE / 120.0f) / (REG_H640 ? 1 : 2);
 }
+
 
 static void vic4_reset_display_counters()
 {
@@ -254,104 +258,68 @@ static void vic4_reset_display_counters()
 	ycounter = 0;
 }
 
+
 static void vic4_update_sideborder_dimensions()
 {
-	if (REG_CSEL) // 40-columns?
-	{
+	if (REG_CSEL) {	// 40-columns?
 		border_x_left = FRAME_H_FRONT + SINGLE_SIDE_BORDER;
-
 		if (!REG_H640)
-		{
 			border_x_right = FRAME_H_FRONT + SCREEN_WIDTH - SINGLE_SIDE_BORDER - 1;
-		}
-		else //80-col mode
-		{
+		else	// 80-col mode
 			border_x_right = FRAME_H_FRONT + SCREEN_WIDTH - SINGLE_SIDE_BORDER;
-		}
-	}
-	else // 38-columns
-	{
+	} else {	// 38-columns
 		border_x_right = FRAME_H_FRONT + SCREEN_WIDTH - SINGLE_SIDE_BORDER - 18;
-
 		if (!REG_H640)
-		{
 			border_x_left = FRAME_H_FRONT + SINGLE_SIDE_BORDER + 14;
-		}
-		else //78-col mode
-		{
+		else	// 78-col mode
 			border_x_left = FRAME_H_FRONT + SINGLE_SIDE_BORDER + 15;
-		}
 	}
 }
+
 
 static void vic4_interpret_legacy_mode_registers()
 {
 	// See https://github.com/MEGA65/mega65-core/blob/257d78aa6a21638cb0120fd34bc0e6ab11adfd7c/src/vhdl/viciv.vhdl#L1277
-
 	vic4_update_sideborder_dimensions();
-
-	if (REG_CSEL) // 40-columns? 
-	{
-		if (!REG_H640) 
-		{
+	if (REG_CSEL) {	// 40-columns?
+		if (!REG_H640)
 			SET_CHARGEN_X_START(FRAME_H_FRONT + SINGLE_SIDE_BORDER + (2 * REG_VIC2_XSCROLL));
-		}
-		else //80-col mode
-		{
+		else	// 80-col mode
 			SET_CHARGEN_X_START(FRAME_H_FRONT + SINGLE_SIDE_BORDER + (2 * REG_VIC2_XSCROLL) - 2);
-		}
-	}
-	else // 38-columns
-	{ 
-		if (!REG_H640) 
-		{
+	} else {	// 38-columns
+		if (!REG_H640)
 			SET_CHARGEN_X_START(FRAME_H_FRONT + SINGLE_SIDE_BORDER + (2 * REG_VIC2_XSCROLL));
-		}
-		else //78-col mode
-		{
+		else	// 78-col mode
 			SET_CHARGEN_X_START(FRAME_H_FRONT + SINGLE_SIDE_BORDER + (2 * REG_VIC2_XSCROLL) - 2);
-		}
 	}
-
-	if (!REG_V400) // Standard mode (200-lines)
-	{
-		if (REG_RSEL) // 25-row
+	if (!REG_V400) {	// Standard mode (200-lines)
+		if (REG_RSEL)	// 25-row
 		{
 			SET_BORDER_Y_TOP(RASTER_CORRECTION + SINGLE_TOP_BORDER_200 - (2 * vicii_first_raster));
 			SET_BORDER_Y_BOTTOM(RASTER_CORRECTION + DISPLAY_HEIGHT - SINGLE_TOP_BORDER_200 - (2 * vicii_first_raster) - 1);
 			display_row_count = 25;
-		}
-		else
-		{
+		} else {
 			SET_BORDER_Y_TOP(RASTER_CORRECTION + SINGLE_TOP_BORDER_200 - (2 * vicii_first_raster) + 8);
 			SET_BORDER_Y_BOTTOM(RASTER_CORRECTION + DISPLAY_HEIGHT - (2 * vicii_first_raster) - SINGLE_TOP_BORDER_200 - 7);
 			display_row_count = 24;
 		}
-
 		SET_CHARGEN_Y_START(RASTER_CORRECTION + SINGLE_TOP_BORDER_200 - (2 * vicii_first_raster) - 6 + REG_VIC2_YSCROLL * 2);
-	}
-	else // V400
-	{
-		if (REG_RSEL) // 25-line+V400
-		{
+	} else {		// V400
+		if (REG_RSEL) {	// 25-line+V400
 			SET_BORDER_Y_TOP(RASTER_CORRECTION + SINGLE_TOP_BORDER_400 - (2 * vicii_first_raster));
 			SET_BORDER_Y_BOTTOM(RASTER_CORRECTION + DISPLAY_HEIGHT - SINGLE_TOP_BORDER_400 - (2 * vicii_first_raster) - 1);
 			display_row_count = 25*2;
-		}
-		else
-		{
+		} else {
 			SET_BORDER_Y_TOP(RASTER_CORRECTION + SINGLE_TOP_BORDER_400 - (2 * vicii_first_raster) + 8);
 			SET_BORDER_Y_BOTTOM(RASTER_CORRECTION + DISPLAY_HEIGHT - (2 * vicii_first_raster) - SINGLE_TOP_BORDER_200 - 7);
 			display_row_count = 24*2;
 		}
-
 		SET_CHARGEN_Y_START(RASTER_CORRECTION + SINGLE_TOP_BORDER_400 - (2 * vicii_first_raster) - 6 + (REG_VIC2_YSCROLL * 2));
 	}
-
 	Uint8 width = REG_H640 ? 80 : 40;
 	REG_CHRCOUNT = width;
 	SET_CHARSTEP_BYTES(width);// * (REG_16BITCHARSET ? 2 : 1));
-	
+
 	REG_SCRNPTR_B0 = 0;
 	REG_SCRNPTR_B1 &= 0xC0;
 	REG_SCRNPTR_B1 |= REG_H640 ?  ((reg_d018_screen_addr & 14) << 2) : (reg_d018_screen_addr << 2);
@@ -367,13 +335,16 @@ static void vic4_interpret_legacy_mode_registers()
 	REG_SPRPTR_B1  = (~last_dd00_bits << 6) | (REG_SPRPTR_B1 & 0x3F);
 	REG_SCRNPTR_B1 = (~last_dd00_bits << 6) | (REG_SCRNPTR_B1 & 0x3F);
 	REG_CHARPTR_B1 = (~last_dd00_bits << 6) | (REG_CHARPTR_B1 & 0x3F);
-	
+
 	SET_COLORRAM_BASE(0);
-	DEBUGPRINT("VIC4: 16bit=%d, chrcount=%d, charstep=%d bytes, charscale=%d, vic_ii_first_raster=%d, ras_src=%d,"
-	          "border yt=%d, yb=%d, xl=%d, xr=%d, textxpos=%d, textypos=%d,"
-	          "screen_ram=$%06x, charset/bitmap=$%06x, sprite=$%06x" NL, REG_16BITCHARSET ,   REG_CHRCOUNT,CHARSTEP_BYTES,REG_CHARXSCALE,
+	DEBUGPRINT(
+		"VIC4: 16bit=%d, chrcount=%d, charstep=%d bytes, charscale=%d, vic_ii_first_raster=%d, ras_src=%d,"
+		"border yt=%d, yb=%d, xl=%d, xr=%d, textxpos=%d, textypos=%d,"
+		"screen_ram=$%06x, charset/bitmap=$%06x, sprite=$%06x" NL,
+		REG_16BITCHARSET ,   REG_CHRCOUNT,CHARSTEP_BYTES,REG_CHARXSCALE,
 		vicii_first_raster, REG_FNRST, BORDER_Y_TOP, BORDER_Y_BOTTOM, border_x_left, border_x_right, CHARGEN_X_START, CHARGEN_Y_START,
-		SCREEN_ADDR, CHARSET_ADDR, SPRITE_POINTER_ADDR);
+		SCREEN_ADDR, CHARSET_ADDR, SPRITE_POINTER_ADDR
+	);
 }
 
 
@@ -391,7 +362,6 @@ static void vic4_interpret_legacy_mode_registers()
 	  for the I/O mode used on the "classic $D000 area" and DMA I/O access only
 */
 
-
 static const char vic_registers_internal_mode_names[] = {'4', '3', '2'};
 
 #define CASE_VIC_2(n) case n+0x100
@@ -399,6 +369,7 @@ static const char vic_registers_internal_mode_names[] = {'4', '3', '2'};
 #define CASE_VIC_4(n) case n
 #define CASE_VIC_ALL(n) CASE_VIC_2(n): CASE_VIC_3(n): CASE_VIC_4(n)
 #define CASE_VIC_3_4(n) CASE_VIC_3(n): CASE_VIC_4(n)
+
 
 /* - If HOTREG register is enabled, VICIV will trigger recalculation of border and such on next raster,
      on any "legacy" register write. For the VIC-IV such "hot" registers are:
@@ -456,7 +427,7 @@ void vic_write_reg ( unsigned int addr, Uint8 data )
 				reg_d018_screen_addr = (data & 0xF0) >> 4;
 				vic_hotreg_touched = 1;
 			}
-			
+
 			data &= 0xFE;
 			break;
 		CASE_VIC_ALL(0x19):
@@ -517,16 +488,14 @@ void vic_write_reg ( unsigned int addr, Uint8 data )
 			// According to Paul,  speed change should trigger "HOTREG" touched notification but no VIC legacy register "interpret"
 			// So probably we need a separate (cpu_speed_hotreg) var?
 			//
-			if ( (vic_registers[0x31]  & 0xBF) ^ (data & 0xBF) )
-			{
+			if ((vic_registers[0x31]  & 0xBF) ^ (data & 0xBF))
 				vic_hotreg_touched = 1;
-			}
 
 			vic4_raster_renderer_path = ( (data & 0x10) == 0)  ? vic4_render_char_raster : vic4_render_bitplane_raster;
-			
+
 			vic_registers[0x31] = data;	// we need this work-around, since reg-write happens _after_ this switch statement, but machine_set_speed above needs it ...
 			machine_set_speed(0);
-		
+
 			vic4_calculate_char_x_step();
 			break;				//We did the write, but we need to trigger vichot_reg if should
 
@@ -536,10 +505,10 @@ void vic_write_reg ( unsigned int addr, Uint8 data )
 		CASE_VIC_3_4(0x47):
 			break;
 		/* --- NO MORE VIC-III REGS FROM HERE --- */
-		CASE_VIC_4(0x48): CASE_VIC_4(0x49): CASE_VIC_4(0x4A): CASE_VIC_4(0x4B): 
+		CASE_VIC_4(0x48): CASE_VIC_4(0x49): CASE_VIC_4(0x4A): CASE_VIC_4(0x4B):
 		CASE_VIC_4(0x4C): CASE_VIC_4(0x4D): CASE_VIC_4(0x4E): CASE_VIC_4(0x4F):
 			break;
-		CASE_VIC_4(0x50): CASE_VIC_4(0x51): 
+		CASE_VIC_4(0x50): CASE_VIC_4(0x51):
 			return; // Writing to XPOS register is no-op
 		CASE_VIC_4(0x52): CASE_VIC_4(0x53):
 			break;
@@ -547,32 +516,32 @@ void vic_write_reg ( unsigned int addr, Uint8 data )
 			vic_registers[0x54] = data;	// we need this work-around, since reg-write happens _after_ this switch statement, but machine_set_speed above needs it ...
 			machine_set_speed(0);
 			return;				// since we DID the write, it's OK to return here and not using "break"
-		CASE_VIC_4(0x55): CASE_VIC_4(0x56): CASE_VIC_4(0x57): break; 
-		CASE_VIC_4(0x58): CASE_VIC_4(0x59): 
+		CASE_VIC_4(0x55): CASE_VIC_4(0x56): CASE_VIC_4(0x57): break;
+		CASE_VIC_4(0x58): CASE_VIC_4(0x59):
 			DEBUGPRINT("VIC: Write $%04x CHARSTEP: $%02x" NL, addr, data);
 			break;
-		CASE_VIC_4(0x5A): 
+		CASE_VIC_4(0x5A):
 			//DEBUGPRINT("WRITE $%04x CHARXSCALE: $%02x" NL, addr, data);
 			vic_registers[0x5A] = data;	// Write now and calculate step.
 			vic4_calculate_char_x_step();
 			return;
-		CASE_VIC_4(0x5B): 
+		CASE_VIC_4(0x5B):
 			break;
 		CASE_VIC_4(0x5C):
 			vic4_sideborder_touched = 1;
 			break;
 
-		CASE_VIC_4(0x5D): 
+		CASE_VIC_4(0x5D):
 			DEBUGPRINT("VIC: Write $%04x SIDEBORDER/HOTREG: $%02x" NL, addr, data);
 
-			if((vic_registers[0x5D] & 0x1F) ^ (data & 0x1F))  // sideborder MSB (0..5) modified ? 
+			if ((vic_registers[0x5D] & 0x1F) ^ (data & 0x1F))	// sideborder MSB (0..5) modified ?
 				vic4_sideborder_touched = 1;
-			break;		
-		
-		CASE_VIC_4(0x5E): 
+			break;
+
+		CASE_VIC_4(0x5E):
 			DEBUGPRINT("VIC: Write $%04x CHARCOUNT: $%02x" NL, addr, data);
 			break;
-		CASE_VIC_4(0x5F): 
+		CASE_VIC_4(0x5F):
 			break;
 		CASE_VIC_4(0x60): CASE_VIC_4(0x61): CASE_VIC_4(0x62): CASE_VIC_4(0x63):
 			DEBUGPRINT("VIC: Write SCREENADDR byte 0xD0%02x: $%02x" NL, addr, data);
@@ -606,23 +575,21 @@ void vic_write_reg ( unsigned int addr, Uint8 data )
 
 			max_rasters = data & 0x80 ? PHYSICAL_RASTERS_NTSC : PHYSICAL_RASTERS_PAL;
 			visible_area_height = data & 0x80 ? SCREEN_HEIGHT_VISIBLE_NTSC : SCREEN_HEIGHT_VISIBLE_PAL;
-			
-			if ((vic_registers[0x6F] & 0x80) ^ (data & 0x80))
-			{
+
+			if ((vic_registers[0x6F] & 0x80) ^ (data & 0x80)) {
 				// Change video mode
 				vic4_reset_display_counters();
 				vic4_switch_display_mode(data & 0x80);
 			}
-		
+
 			vicii_first_raster = data & 0x1F;
 
-			if (!in_hypervisor)
-			{
+			if (!in_hypervisor) {
 				vic4_sideborder_touched = 1;
 				vic4_interpret_legacy_mode_registers();
 			}
 
-			break;			
+			break;
 
 		CASE_VIC_4(0x70):	// VIC-IV palette selection register
 			palette		= ((data & 0x03) << 8) + vic_palettes;
@@ -658,20 +625,15 @@ void vic_write_reg ( unsigned int addr, Uint8 data )
 			FATAL("Xemu: invalid VIC internal register numbering on write: $%X", addr);
 	}
 	vic_registers[addr & 0x7F] = data;
-	if (REG_HOTREG)
-	{
-		if (vic_hotreg_touched)
-		{
+	if (REG_HOTREG) {
+		if (vic_hotreg_touched) {
 			//DEBUGPRINT("VIC: vic_hotreg_touched triggered (WRITE $D0%02x, $%02x)" NL, addr & 0x7F, data );
 			vic4_interpret_legacy_mode_registers();
 			vic_hotreg_touched = 0;
 			vic4_sideborder_touched = 0;
 		}
-
-		if (vic4_sideborder_touched)
-		{
+		if (vic4_sideborder_touched) {
 			//DEBUGPRINT("VIC: vic4_sideborder_touched triggered (WRITE $D0%02x, $%02x)" NL, addr & 0x7F, data );
-			
 			vic4_update_sideborder_dimensions();
 			vic4_sideborder_touched = 0;
 		}
@@ -754,7 +716,7 @@ Uint8 vic_read_reg ( int unsigned addr )
 			break;
 		/* --- NO MORE VIC-III REGS FROM HERE --- */
 		CASE_VIC_4(0x48): CASE_VIC_4(0x49): CASE_VIC_4(0x4A): CASE_VIC_4(0x4B): CASE_VIC_4(0x4C): CASE_VIC_4(0x4D): CASE_VIC_4(0x4E): CASE_VIC_4(0x4F):
-		CASE_VIC_4(0x50): 
+		CASE_VIC_4(0x50):
 			break;
 		CASE_VIC_4(0x51):
 			result = vic_registers[0x51]++;
@@ -766,12 +728,12 @@ Uint8 vic_read_reg ( int unsigned addr )
 		CASE_VIC_4(0x55): CASE_VIC_4(0x56): CASE_VIC_4(0x57): CASE_VIC_4(0x58): CASE_VIC_4(0x59): CASE_VIC_4(0x5A): CASE_VIC_4(0x5B): CASE_VIC_4(0x5C):
 		CASE_VIC_4(0x5D): CASE_VIC_4(0x5E): CASE_VIC_4(0x5F): CASE_VIC_4(0x60): CASE_VIC_4(0x61): CASE_VIC_4(0x62): CASE_VIC_4(0x63): CASE_VIC_4(0x64):
 		CASE_VIC_4(0x65): CASE_VIC_4(0x66): CASE_VIC_4(0x67): CASE_VIC_4(0x68): CASE_VIC_4(0x69): CASE_VIC_4(0x6A): CASE_VIC_4(0x6B): CASE_VIC_4(0x6C):
-		CASE_VIC_4(0x6D): 
+		CASE_VIC_4(0x6D):
 			break;
-		CASE_VIC_4(0x6E): 
+		CASE_VIC_4(0x6E):
 
 			break;
-		
+
 		CASE_VIC_4(0x6F): CASE_VIC_4(0x70): CASE_VIC_4(0x71): CASE_VIC_4(0x72): CASE_VIC_4(0x73): CASE_VIC_4(0x74):
 		CASE_VIC_4(0x75): CASE_VIC_4(0x76): CASE_VIC_4(0x77): CASE_VIC_4(0x78): CASE_VIC_4(0x79): CASE_VIC_4(0x7A): CASE_VIC_4(0x7B): CASE_VIC_4(0x7C):
 		CASE_VIC_4(0x7D): CASE_VIC_4(0x7E): CASE_VIC_4(0x7F):
@@ -809,51 +771,48 @@ Uint8 vic_read_reg ( int unsigned addr )
 
 static inline Uint32 get_charset_effective_addr()
 {
-	// cache this? 
-	switch (CHARSET_ADDR)
-	{
-	case 0x1000:
-		return 0x2D000;
-	case 0x9000:
-		return 0x29000;
-	case 0x1800:
-		return 0x2D800;
-	case 0x9800:
-		return 0x29800;
+	// cache this?
+	switch (CHARSET_ADDR) {
+		case 0x1000:
+			return 0x2D000;
+		case 0x9000:
+			return 0x29000;
+		case 0x1800:
+			return 0x2D800;
+		case 0x9800:
+			return 0x29800;
 	}
 	return CHARSET_ADDR;
 }
 
-static void vic4_draw_sprite_row_16color(int sprnum, int x_display_pos, const Uint8* row_data_ptr, int xscale)
+
+static void vic4_draw_sprite_row_16color( int sprnum, int x_display_pos, const Uint8* row_data_ptr, int xscale )
 {
 	const int totalBytes = SPRITE_EXTWIDTH(sprnum) ? 8 : 3;
 	const int palindexbase = sprnum * 16 + 128 * (SPRITE_BITPLANE_ENABLE(sprnum) >> sprnum);
 
-	for (int byte = 0; byte < totalBytes; ++byte)
-	{
+	for (int byte = 0; byte < totalBytes; ++byte) {
 		const Uint8 c0 = (*(row_data_ptr + byte)) >> 4;
 		const Uint8 c1 = (*(row_data_ptr + byte)) & 0xF;
-		for (int p = 0; p < xscale && x_display_pos < border_x_right; ++p, ++x_display_pos)
-		{
-			if (c0)
-			{
-				if (x_display_pos >= border_x_left &&
-					(!SPRITE_IS_BACK(sprnum) ||
-					 (SPRITE_IS_BACK(sprnum) && bg_pixel_state[x_display_pos] != FOREGROUND_PIXEL)))
-				{
+		for (int p = 0; p < xscale && x_display_pos < border_x_right; ++p, ++x_display_pos) {
+			if (c0) {
+				if (
+					x_display_pos >= border_x_left && (
+						!SPRITE_IS_BACK(sprnum) || (SPRITE_IS_BACK(sprnum) && bg_pixel_state[x_display_pos] != FOREGROUND_PIXEL)
+					)
+				) {
 					*(pixel_raster_start + x_display_pos) = spritepalette[palindexbase + c0];
 				}
 			}
 		}
 
-		for (int p = 0; p < xscale && x_display_pos < border_x_right; ++p, ++x_display_pos)
-		{
-			if (c1)
-			{
-				if (x_display_pos >= border_x_left &&
-					(!SPRITE_IS_BACK(sprnum) ||
-					 (SPRITE_IS_BACK(sprnum) && bg_pixel_state[x_display_pos] != FOREGROUND_PIXEL)))
-				{
+		for (int p = 0; p < xscale && x_display_pos < border_x_right; ++p, ++x_display_pos) {
+			if (c1) {
+				if (
+					x_display_pos >= border_x_left && (
+						!SPRITE_IS_BACK(sprnum) || (SPRITE_IS_BACK(sprnum) && bg_pixel_state[x_display_pos] != FOREGROUND_PIXEL)
+					)
+				) {
 					*(pixel_raster_start + x_display_pos) = spritepalette[palindexbase + c1];
 				}
 			}
@@ -861,39 +820,37 @@ static void vic4_draw_sprite_row_16color(int sprnum, int x_display_pos, const Ui
 	}
 }
 
-static void vic4_draw_sprite_row_multicolor(int sprnum, int x_display_pos, const Uint8* row_data_ptr, int xscale)
+
+static void vic4_draw_sprite_row_multicolor ( int sprnum, int x_display_pos, const Uint8* row_data_ptr, int xscale )
 {
 	const int totalBytes = SPRITE_EXTWIDTH(sprnum) ? 8 : 3;
-	for (int byte = 0; byte < totalBytes; ++byte)
-	{
-		for (int xbit = 0; xbit < 8; xbit += 2)
-		{
+	for (int byte = 0; byte < totalBytes; ++byte) {
+		for (int xbit = 0; xbit < 8; xbit += 2) {
 			const Uint8 p0 = *row_data_ptr & (0x80 >> xbit);
 			const Uint8 p1 = *row_data_ptr & (0x40 >> xbit);
-			
-			Uint8 pixel = 0; // TODO: See generated code -- use lookup instead of branch?
-			if (!p0 && p1) 
+
+			Uint8 pixel = 0;	// TODO: See generated code -- use lookup instead of branch?
+			if (!p0 && p1)
 				pixel = SPRITE_MULTICOLOR_1;
 			else if (p0 && !p1)
 				pixel = SPRITE_COLOR(sprnum);
 			else if (p0 && p1)
 				pixel = SPRITE_MULTICOLOR_2;
 
-			for (int p = 0; p < xscale && x_display_pos < border_x_right; ++p, x_display_pos += 2)
-			{
-				if (pixel)
-				{
-					if (x_display_pos >= border_x_left &&
-						(!SPRITE_IS_BACK(sprnum) ||
-						 (SPRITE_IS_BACK(sprnum) && bg_pixel_state[x_display_pos] != FOREGROUND_PIXEL)))
-					{
+			for (int p = 0; p < xscale && x_display_pos < border_x_right; ++p, x_display_pos += 2) {
+				if (pixel) {
+					if (
+						x_display_pos >= border_x_left && (
+							!SPRITE_IS_BACK(sprnum) || (SPRITE_IS_BACK(sprnum) && bg_pixel_state[x_display_pos] != FOREGROUND_PIXEL)
+						)
+					) {
 						*(pixel_raster_start + x_display_pos) = spritepalette[pixel];
 					}
 
-					if (x_display_pos+1 >= border_x_left &&
-						(!SPRITE_IS_BACK(sprnum) ||
-						 (SPRITE_IS_BACK(sprnum) && bg_pixel_state[x_display_pos + 1] != FOREGROUND_PIXEL)))
-					{
+					if (x_display_pos+1 >= border_x_left && (
+							!SPRITE_IS_BACK(sprnum) || (SPRITE_IS_BACK(sprnum) && bg_pixel_state[x_display_pos + 1] != FOREGROUND_PIXEL)
+						)
+					) {
 						*(pixel_raster_start + x_display_pos + 1) = spritepalette[pixel];
 					}
 				}
@@ -903,21 +860,21 @@ static void vic4_draw_sprite_row_multicolor(int sprnum, int x_display_pos, const
 	}
 }
 
-static void vic4_draw_sprite_row_mono(int sprnum, int x_display_pos, const Uint8 *row_data_ptr, int xscale)
+
+static void vic4_draw_sprite_row_mono ( int sprnum, int x_display_pos, const Uint8 *row_data_ptr, int xscale )
 {
 	const int totalBytes = SPRITE_EXTWIDTH(sprnum) ? 8 : 3;
-	for (int byte = 0; byte < totalBytes; ++byte)
-	{
-		for (int xbit = 0; xbit < 8; ++xbit)
-		{
+	for (int byte = 0; byte < totalBytes; ++byte) {
+		for (int xbit = 0; xbit < 8; ++xbit) {
 			const Uint8 pixel = *row_data_ptr & (0x80 >> xbit);
-			for (int p = 0; p < xscale && x_display_pos < border_x_right; ++p, ++x_display_pos)
-			{
-				if (x_display_pos >= border_x_left &&
-					pixel &&
-					(!SPRITE_IS_BACK(sprnum) ||
-					 (SPRITE_IS_BACK(sprnum) && bg_pixel_state[x_display_pos] != FOREGROUND_PIXEL)))
-				{
+			for (int p = 0; p < xscale && x_display_pos < border_x_right; ++p, ++x_display_pos) {
+				if (
+					x_display_pos >= border_x_left &&
+					pixel && (
+						!SPRITE_IS_BACK(sprnum) ||
+						(SPRITE_IS_BACK(sprnum) && bg_pixel_state[x_display_pos] != FOREGROUND_PIXEL)
+					)
+				) {
 					*(pixel_raster_start + x_display_pos) = spritepalette[SPRITE_COLOR(sprnum)];
 				}
 			}
@@ -926,33 +883,30 @@ static void vic4_draw_sprite_row_mono(int sprnum, int x_display_pos, const Uint8
 	}
 }
 
+
 static void vic4_do_sprites()
 {
 	// Fetch and sequence sprites.
-	// 
+	//
 	// NOTE about Text/Bitmap Graphics Background/foreground semantics:
 	// In multicolor mode (MCM=1), the bit combinations “00” and “01” belong to the background
-	// and “10” and “11” to the foreground whereas in standard mode (MCM=0), 
+	// and “10” and “11” to the foreground whereas in standard mode (MCM=0),
 	// cleared pixels belong to the background and set pixels to the foreground.
-	//
-	for (int sprnum = 7; sprnum >= 0; --sprnum)
-	{
-		if (REG_SPRITE_ENABLE & (1 << sprnum))
-		{ 
+	for (int sprnum = 7; sprnum >= 0; --sprnum) {
+		if (REG_SPRITE_ENABLE & (1 << sprnum)) {
 			const int spriteHeight = SPRITE_EXTHEIGHT(sprnum) ? REG_SPRHGHT : 21;
-			int x_display_pos = border_x_left + ((SPRITE_POS_X(sprnum) - SPRITE_X_BASE_COORD) * (REG_SPR640 ? 1 : 2)); // in display units
-			int y_logical_pos = SPRITE_POS_Y(sprnum) - SPRITE_Y_BASE_COORD +(BORDER_Y_TOP / (REG_V400 ? 1 : 2)); // in logical units
+			int x_display_pos = border_x_left + ((SPRITE_POS_X(sprnum) - SPRITE_X_BASE_COORD) * (REG_SPR640 ? 1 : 2));	// in display units
+			int y_logical_pos = SPRITE_POS_Y(sprnum) - SPRITE_Y_BASE_COORD +(BORDER_Y_TOP / (REG_V400 ? 1 : 2));		// in logical units
 
 			int sprite_row_in_raster = logical_raster - y_logical_pos;
-			
+
 			if (SPRITE_VERT_2X(sprnum))
 				sprite_row_in_raster = sprite_row_in_raster >> 1;
 
-			if (sprite_row_in_raster >= 0 && sprite_row_in_raster < spriteHeight) 
-			{
+			if (sprite_row_in_raster >= 0 && sprite_row_in_raster < spriteHeight) {
 				const int widthBytes = SPRITE_EXTWIDTH(sprnum) ? 8 : 3;
 				const Uint8 *sprite_data_pointer =  main_ram + SPRITE_POINTER_ADDR + sprnum * ((SPRITE_16BITPOINTER >> 7) + 1);
-				const Uint32 sprite_data_addr = SPRITE_16BITPOINTER ? 
+				const Uint32 sprite_data_addr = SPRITE_16BITPOINTER ?
 					64 * ((*(sprite_data_pointer + 1) << 8) | (*sprite_data_pointer))
 					: ((64 * (*sprite_data_pointer)) | ( ((~last_dd00_bits) & 0x3)) << 14);
 
@@ -971,61 +925,46 @@ static void vic4_do_sprites()
 	}
 }
 
+
 // Render a monochrome character cell row
 // flip = 00 Dont flip, 01 = flip vertical, 10 = flip horizontal, 11 = flip both
-
-static void vic4_render_mono_char_row(Uint8 char_byte, int glyph_width, Uint8 bg_color, Uint8 fg_color, Uint8 vic3attr)
+static void vic4_render_mono_char_row ( Uint8 char_byte, int glyph_width, Uint8 bg_color, Uint8 fg_color, Uint8 vic3attr )
 {
-	if (vic3attr)
-	{		
+	if (vic3attr) {
 		if (char_row == 7 && VIC3_ATTR_UNDERLINE(vic3attr))
 			char_byte = 0xFF;
-
 		if (VIC3_ATTR_REVERSE(vic3attr))
 			char_byte = ~char_byte;
-
-		if (VIC3_ATTR_BLINK(vic3attr) && vic4_blink_phase) 
+		if (VIC3_ATTR_BLINK(vic3attr) && vic4_blink_phase)
 			char_byte = VIC3_ATTR_REVERSE(vic3attr) ? ~char_byte : 0;
-		
 		if (VIC3_ATTR_BOLD(vic3attr))
-		{
 			fg_color |= 0x10;
-		}
 	}
-
-	if (enable_bg_paint)
-	{
-		for (float cx = 0; cx < glyph_width && xcounter < border_x_right; cx += char_x_step)
-		{
+	if (enable_bg_paint) {
+		for (float cx = 0; cx < glyph_width && xcounter < border_x_right; cx += char_x_step) {
 			const Uint8 char_pixel = (char_byte & (0x80 >> (int)cx));
 			Uint32 pixel_color = char_pixel ? palette[fg_color] : palette[bg_color];
 			*(current_pixel++) = pixel_color;
 			bg_pixel_state[xcounter++] = char_pixel ? FOREGROUND_PIXEL : BACKGROUND_PIXEL;
 		}
-	}
-	else // HACK!! to support MEGAMAZE GOTOX+VFLIP bits that ignore the background paint until
-	     // next raster.
-	{
-		for (float cx = 0; cx < glyph_width && xcounter < border_x_right; cx += char_x_step)
-		{
+	} else {	// HACK!! to support MEGAMAZE GOTOX+VFLIP bits that ignore the background paint until next raster.
+		for (float cx = 0; cx < glyph_width && xcounter < border_x_right; cx += char_x_step) {
 			const Uint8 char_pixel = (char_byte & (0x80 >> (int)cx));
 			if (char_pixel)
 				*current_pixel = palette[fg_color];
-			
 			current_pixel++;
 			bg_pixel_state[xcounter++] = char_pixel ? FOREGROUND_PIXEL : BACKGROUND_PIXEL;
 		}
 	}
-	
 }
 
-static void vic4_render_multicolor_char_row(Uint8 char_byte, int glyph_width, const Uint8 color_source[4])
+
+static void vic4_render_multicolor_char_row ( Uint8 char_byte, int glyph_width, const Uint8 color_source[4] )
 {
-	for (float cx = 0; cx < glyph_width && xcounter < border_x_right; cx += char_x_step)
-	{
+	for (float cx = 0; cx < glyph_width && xcounter < border_x_right; cx += char_x_step) {
 		const Uint8 bitsel =  2 * (int)(cx / 2);
 		const Uint8 bit_pair = (char_byte & (0x80 >> bitsel)) >> (6-bitsel) | (char_byte & (0x40 >> bitsel)) >> (6-bitsel);
-		
+
 		Uint8 pixel = color_source[bit_pair];
 		const Uint8 layer = bit_pair & 2 ? FOREGROUND_PIXEL : BACKGROUND_PIXEL;
 		*(current_pixel++) = palette[pixel];
@@ -1033,48 +972,49 @@ static void vic4_render_multicolor_char_row(Uint8 char_byte, int glyph_width, co
 	}
 }
 
+
 // 8-bytes per row
-static void vic4_render_fullcolor_char_row(const Uint8* char_row, int glyph_width)
-{	
-	for (float cx = 0; cx < glyph_width && xcounter < border_x_right; cx += char_x_step)
-	{
+static void vic4_render_fullcolor_char_row ( const Uint8* char_row, int glyph_width )
+{
+	for (float cx = 0; cx < glyph_width && xcounter < border_x_right; cx += char_x_step) {
 		Uint32 pixel_color = palette[char_row[(int)cx]];
 		*(current_pixel++) = pixel_color;
 		bg_pixel_state[xcounter++] = pixel_color ? FOREGROUND_PIXEL : BACKGROUND_PIXEL;
 	}
 }
 
+
 // Render a bitplane-mode character cell row
-//
-static void vic4_render_bitplane_char_row(Uint8* bp_base[8], int glyph_width)
+static void vic4_render_bitplane_char_row ( Uint8* bp_base[8], int glyph_width )
 {
 	const Uint8 bpe_mask = vic_registers[0x32] & (REG_H640 ? 15 : 255);
-	const Uint8 bp_comp = vic_registers[0x3B]; 
+	const Uint8 bp_comp = vic_registers[0x3B];
 
-	for (float cx = 0; cx < glyph_width && xcounter < border_x_right; cx += char_x_step)
-	{
+	for (float cx = 0; cx < glyph_width && xcounter < border_x_right; cx += char_x_step) {
 		const Uint8 bitsel = 0x80 >> ((int)cx);
 		const Uint32 pixel_color = palette[
-			((((*bp_base[0] & bitsel) ? 1 : 0) | 
-			((*bp_base[1] & bitsel) ? 2 : 0) |
-			((*bp_base[2] & bitsel) ? 4 : 0) |
-			((*bp_base[3] & bitsel) ? 8 : 0) |
-			((*bp_base[4] & bitsel) ? 16 : 0) |
-			((*bp_base[5] & bitsel) ? 32 : 0) |
-			((*bp_base[6] & bitsel) ? 64 : 0) |
-			((*bp_base[7] & bitsel) ? 128 : 0)) & bpe_mask) ^ bp_comp];
+			((
+				((*bp_base[0] & bitsel) ?   1 : 0) |
+				((*bp_base[1] & bitsel) ?   2 : 0) |
+				((*bp_base[2] & bitsel) ?   4 : 0) |
+				((*bp_base[3] & bitsel) ?   8 : 0) |
+				((*bp_base[4] & bitsel) ?  16 : 0) |
+				((*bp_base[5] & bitsel) ?  32 : 0) |
+				((*bp_base[6] & bitsel) ?  64 : 0) |
+				((*bp_base[7] & bitsel) ? 128 : 0)
+			) & bpe_mask) ^ bp_comp
+		];
 		*(current_pixel++) = pixel_color;
 		bg_pixel_state[xcounter++] = *bp_base[2] & bitsel ? FOREGROUND_PIXEL : BACKGROUND_PIXEL;
 	}
 }
 
+
 void vic4_render_bitplane_raster()
 {
 	Uint8* bp_base[8];
-	
 	// Get Bitplane source addresses
 	/* TODO: Cache the following reads & EA calculation */
-
 	const Uint32 offset = display_row * REG_CHRCOUNT * 8 + char_row ;
 	bp_base[0] = bitplane_bank_p + ((vic_registers[0x33] & (REG_H640 ? 12 : 14)) << 12) + offset;
 	bp_base[1] = bitplane_bank_p + ((vic_registers[0x34] & (REG_H640 ? 12 : 14)) << 12) + 0x10000 + offset;
@@ -1084,10 +1024,8 @@ void vic4_render_bitplane_raster()
 	bp_base[5] = bitplane_bank_p + ((vic_registers[0x38] & (REG_H640 ? 12 : 14)) << 12) + 0x10000 + offset;
 	bp_base[6] = bitplane_bank_p + ((vic_registers[0x39] & (REG_H640 ? 12 : 14)) << 12) + offset;
 	bp_base[7] = bitplane_bank_p + ((vic_registers[0x3A] & (REG_H640 ? 12 : 14)) << 12) + 0x10000 + offset;
-
-	int line_char_index = 0;				
-	while(line_char_index < REG_CHRCOUNT)
-	{
+	int line_char_index = 0;
+	while(line_char_index < REG_CHRCOUNT) {
 		vic4_render_bitplane_char_row(bp_base, 8);
 		bp_base[0] += 8;
 		bp_base[1] += 8;
@@ -1099,36 +1037,29 @@ void vic4_render_bitplane_raster()
 		bp_base[7] += 8;
 		line_char_index++;
 	}
-
-	if (++char_row > 7)
-	{		
+	if (++char_row > 7) {
 		char_row = 0;
 		display_row++;
 	}
-
 	while (xcounter++ < border_x_right)
 		*current_pixel++ = palette[REG_SCREEN_COLOR];
-	
 }
 
-//
-//
+
 // The character rendering engine. Most features are shared between
 // all graphic modes.  Basically, the VIC-IV supports the following character
-// color modes: 
+// color modes:
 //
 // - Monochrome (Bg/Fg)
 // - VICII Multicolor
-// - 16-color 
-// - 256-color 
+// - 16-color
+// - 256-color
 //
-// It's interesting to see that the four modes can be selected in 
+// It's interesting to see that the four modes can be selected in
 // bitmap or text modes.
 //
-// VIC-III Extended attributes are applied to characters if properly set, 
+// VIC-III Extended attributes are applied to characters if properly set,
 // except in Multicolor modes.
-//
-
 void vic4_render_char_raster()
 {
 	int line_char_index = 0;
@@ -1139,13 +1070,12 @@ void vic4_render_char_raster()
 	const int row_offset = (BORDER_Y_TOP - CHARGEN_Y_START) / 8;
 	const int adj_display_row = row_offset + display_row;
 
-	if (adj_display_row >= 0 && adj_display_row < display_row_count)
-	{
+	if (adj_display_row >= 0 && adj_display_row < display_row_count) {
 		const int char_row_offset = (BORDER_Y_TOP - CHARGEN_Y_START) % 8;
-		colour_ram_current_ptr = colour_ram + COLOUR_RAM_OFFSET + (adj_display_row  * CHARSTEP_BYTES); 
+		colour_ram_current_ptr = colour_ram + COLOUR_RAM_OFFSET + (adj_display_row  * CHARSTEP_BYTES);
 		screen_ram_current_ptr = main_ram + SCREEN_ADDR + (adj_display_row  * CHARSTEP_BYTES);
 		const Uint8* row_data_base_addr = main_ram + (REG_BMM ?  VIC2_BITMAP_ADDR : get_charset_effective_addr());
-		
+
 		// Account for Chargen X-displacement
 
 		for(Uint32* p = current_pixel; p < current_pixel + (CHARGEN_X_START - border_x_left); ++p)
@@ -1154,37 +1084,31 @@ void vic4_render_char_raster()
 		current_pixel +=  (CHARGEN_X_START - border_x_left);
 		xcounter += (CHARGEN_X_START - border_x_left);
 		const int xcounter_start = xcounter;
-		
+
 		// Chargen starts here.
 
-		while (line_char_index < REG_CHRCOUNT)
-		{
+		while (line_char_index < REG_CHRCOUNT) {
 			Uint16 color_data = *(colour_ram_current_ptr++);
 			Uint16 char_value = *(screen_ram_current_ptr++);
 
-			if (REG_16BITCHARSET)
-			{
+			if (REG_16BITCHARSET) {
 				color_data = (color_data << 8) | (*(colour_ram_current_ptr++));
 				char_value = char_value | (*(screen_ram_current_ptr++) << 8);
 
-				if (SXA_GOTO_X(color_data))
-				{
+				if (SXA_GOTO_X(color_data)) {
 					current_pixel = pixel_raster_start + xcounter_start + (char_value & 0x3FF);
 					xcounter = xcounter_start + (char_value & 0x3FF);
 					line_char_index++;
 
 					if (SXA_VERTICAL_FLIP(color_data))
-					{
 						enable_bg_paint = 0;
-					}
-
 					continue;
 				}
 			}
 
 			// Background and foreground colors
 
-			const Uint8 char_fgcolor = color_data & 0xF; 
+			const Uint8 char_fgcolor = color_data & 0xF;
 			const Uint8 vic3_attr = REG_VICIII_ATTRIBS && !REG_MCM ? (color_data >> 4) : 0;
 			const Uint16 char_id = REG_EBM ? (char_value & 0x3f) : char_value & 0x1fff; // up to 8192 characters (13-bit)
 			const Uint8 char_bgcolor = REG_EBM ? vic_registers[0x21 + ((char_value >> 6) & 3)] : REG_SCREEN_COLOR;
@@ -1197,72 +1121,53 @@ void vic4_render_char_raster()
 			// Default fetch from char mode.
 			Uint8 char_byte;
 			int sel_char_row = char_row + char_row_offset;
-			
+
 			if (SXA_VERTICAL_FLIP(color_data))
 				sel_char_row = 7 - char_row + char_row_offset;
 
 			if (REG_BMM)
-			{
 				char_byte = *(row_data_base_addr + display_row * 320 + 8 * line_char_index  + sel_char_row);
-			}
 			else
-			{
 				char_byte = *(row_data_base_addr + (char_id * 8) + sel_char_row);
-			}
-			
+
 			if (SXA_HORIZONTAL_FLIP(color_data))
 				char_byte = reverse_byte(char_byte);
 
 			// Render character cell row
-					
-			if (SXA_4BIT_PER_PIXEL(color_data)) // 16-color character
-			{
 
-			}
-			else if (CHAR_IS256_COLOR(char_id)) // 256-color character
-			{
+			if (SXA_4BIT_PER_PIXEL(color_data)) {	// 16-color character
+				// FIXME: TODO??
+			} else if (CHAR_IS256_COLOR(char_id)) {	// 256-color character
 				vic4_render_fullcolor_char_row(main_ram + (((char_id * 64) + (sel_char_row * 8) ) & 0x7FFFF), 8);
-			}
-			else if ((REG_MCM && (char_fgcolor & 8)) || (REG_MCM && REG_BMM)) // Multicolor character
-			{
-				if (REG_BMM)
-				{
+			} else if ((REG_MCM && (char_fgcolor & 8)) || (REG_MCM && REG_BMM)) {	// Multicolor character
+				if (REG_BMM) {
 					const Uint8 color_source[4] = {
-						REG_SCREEN_COLOR,	//00
-						char_value >> 4,  	//01
-						char_value & 0xF, 	//10
-						color_data & 0xF  	//11
+						REG_SCREEN_COLOR,	// 00
+						char_value >> 4,	// 01
+						char_value & 0xF,	// 10
+						color_data & 0xF	// 11
+					};
+					vic4_render_multicolor_char_row(char_byte, glyph_width, color_source);
+				} else {
+					const Uint8 color_source[4] = {
+						REG_SCREEN_COLOR,	// 00
+						REG_MULTICOLOR_1,	// 01
+						REG_MULTICOLOR_2,	// 10
+						char_fgcolor & 7	// 11
 					};
 					vic4_render_multicolor_char_row(char_byte, glyph_width, color_source);
 				}
-				else
-				{
-					const Uint8 color_source[4] = {
-						REG_SCREEN_COLOR, //00
-						REG_MULTICOLOR_1, //01
-						REG_MULTICOLOR_2, //10
-						char_fgcolor & 7  //11
-					};
-					vic4_render_multicolor_char_row(char_byte, glyph_width, color_source);
-				}
-			}
-			else // Single color character
-			{
+			} else {	// Single color character
 				if (!REG_BMM)
-				{
 					vic4_render_mono_char_row(char_byte, glyph_width, char_bgcolor, char_fgcolor, vic3_attr);
-				}
 				else
-				{
 					vic4_render_mono_char_row(char_byte, glyph_width, char_value & 0xF, char_value >> 4, vic3_attr );
-				}
 			}
 			line_char_index++;
 		}
 	}
 
-	if (++char_row > 7)
-	{		
+	if (++char_row > 7) {
 		char_row = 0;
 		display_row++;
 	}
@@ -1273,7 +1178,8 @@ void vic4_render_char_raster()
 		*current_pixel++ = palette[REG_SCREEN_COLOR];
 }
 
-int vic4_render_scanline() 
+
+int vic4_render_scanline()
 {
 	// Work this first. DO NOT OPTIMIZE EARLY.
 
@@ -1284,27 +1190,18 @@ int vic4_render_scanline()
 	SET_PHYSICAL_RASTER(ycounter);
 	logical_raster = ycounter >> (REG_V400 ? 0 : 1);
 
-	if (!(ycounter & 1)) // VIC-II raster source: We shall check FNRST ? 
+	if (!(ycounter & 1)) // VIC-II raster source: We shall check FNRST ?
 		vic4_check_raster_interrupt(logical_raster);
-
 	// "Double-scan hack"
-	if (!REG_V400 && (ycounter & 1))
-	{
+	if (!REG_V400 && (ycounter & 1)) {
 		for (int i = 0; i < SCREEN_WIDTH; i++, current_pixel++)
 			*current_pixel = /* user_scanlines_setting ? 0 : */ *(current_pixel - SCREEN_WIDTH) ;
-	}
-	else
-	{
-		
+	} else {
 		// Top and bottom borders
-
-		if (ycounter < BORDER_Y_TOP || ycounter >= BORDER_Y_BOTTOM || !REG_DISPLAYENABLE)
-		{
+		if (ycounter < BORDER_Y_TOP || ycounter >= BORDER_Y_BOTTOM || !REG_DISPLAYENABLE) {
 			for (int i = 0; i < SCREEN_WIDTH; ++i)
 				*(current_pixel++) = palette[REG_BORDER_COLOR & 0xF];
-		}
-		else
-		{
+		} else {
 			// Render visible display first and render side-borders later to cover X-displaced
 			// character generator if needed.
 
@@ -1322,25 +1219,22 @@ int vic4_render_scanline()
 		}
 	}
 	ycounter++;
-
 	// End of frame?
-	if (ycounter == max_rasters)    
-	{
+	if (ycounter == max_rasters) {
 		vic4_reset_display_counters();
-		
+
 		screen_ram_current_ptr = main_ram + SCREEN_ADDR;
 		colour_ram_current_ptr = colour_ram + COLOUR_RAM_OFFSET;
 		frame_counter++;
-		if (frame_counter == VIC4_BLINK_INTERVAL)
-		{
+		if (frame_counter == VIC4_BLINK_INTERVAL) {
 			frame_counter = 0;
 			vic4_blink_phase = !vic4_blink_phase;
 		}
 		return 1;
 	}
-
 	return 0;
 }
+
 
 /* --- SNAPSHOT RELATED --- */
 

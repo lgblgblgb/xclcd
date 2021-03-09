@@ -28,6 +28,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
 #include "xemu/emutools_hid.h"
 #include "xemu/c64_kbd_mapping.h"
 #include "inject.h"
+#include "vic4.h"
 
 #define		HELP_URL	"https://github.com/lgblgblgb/xemu/wiki/MEGA65-help"
 
@@ -229,11 +230,6 @@ static void ui_update_sdcard ( void )
 }
 
 
-static const struct menu_st menu_scanlines[] = {
-	{ "On",    XEMUGUI_MENUID_CALLABLE, xemugui_cb_scanlines, (void*)1 },
-	{ "Off", XEMUGUI_MENUID_CALLABLE,   xemugui_cb_scanlines, (void*)0 },
-	{ NULL }
-};
 static void reset_into_utility_menu ( void )
 {
 	reset_mega65_asked();
@@ -250,11 +246,24 @@ static void reset_into_c64_mode ( void )
 }
 
 
+
+void xemugui_cb_scanlines ( const struct menu_st *m, int *query )
+{
+	int mode_spec = (int)(uintptr_t)m->user_data;
+	user_scanlines_setting = mode_spec;
+}
+
+static const struct menu_st menu_scanlines[] = {
+	{ "On",    XEMUGUI_MENUID_CALLABLE, xemugui_cb_scanlines, (void*)1 },
+	{ "Off", XEMUGUI_MENUID_CALLABLE,   xemugui_cb_scanlines, (void*)0 },
+	{ NULL }
+};
+
 static const struct menu_st menu_display[] = {
 	{ "Fullscreen",			XEMUGUI_MENUID_CALLABLE,	xemugui_cb_windowsize, (void*)0 },
 	{ "Window - 100%",		XEMUGUI_MENUID_CALLABLE,	xemugui_cb_windowsize, (void*)1 },
 	{ "Window - 200%",		XEMUGUI_MENUID_CALLABLE,	xemugui_cb_windowsize, (void*)2 },
-	{ "Scanlines",	   XEMUGUI_MENUID_SUBMENU,	menu_scanlines, NULL },
+	{ "Scanlines",			XEMUGUI_MENUID_SUBMENU,		menu_scanlines, NULL },
 	{ NULL }
 };
 static const struct menu_st menu_sdcard[] = {

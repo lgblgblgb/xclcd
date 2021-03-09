@@ -62,7 +62,7 @@ static int cpu_cycles_per_step = 100; 	// some init value, will be overriden, bu
 static int force_external_rom = 0;
 static int force_upload_fonts = 0;
 
-Uint8 last_dd00_bits = 3; // Bank 0 
+Uint8 last_dd00_bits = 3;	// Bank 0
 
 void cpu65_illegal_opcode_callback ( void )
 {
@@ -171,9 +171,8 @@ static void cia2_setint_cb ( int level )
 
 
 static void cia2_out_a ( Uint8 data )
-{   
-	if (REG_HOTREG && !REG_CRAM2K)
-	{
+{
+	if (REG_HOTREG && !REG_CRAM2K) {
 		// Bank select
 
 		data &= (cia2.DDRA & 3); // Mask bank bits through CIA DDR register bits

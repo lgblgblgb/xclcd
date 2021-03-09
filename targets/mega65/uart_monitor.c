@@ -111,7 +111,7 @@ static void setmem28(char *param, int addr)
   // get param count
   while (param && !check_end_of_command(param, 0))
   {
-    param = parse_hex_arg(param, &val, 0, 0xFF); 
+    param = parse_hex_arg(param, &val, 0, 0xFF);
     cnt++;
   }
 

@@ -74,6 +74,5 @@ extern void xemugui_cb_about_window		( const struct menu_st *m, int *query );
 extern void xemugui_cb_sysconsole		( const struct menu_st *m, int *query );
 #endif
 extern void xemugui_cb_windowsize		( const struct menu_st *m, int *query );
-extern void xemugui_cb_scanlines		( const struct menu_st *m, int *query );
 
 #endif

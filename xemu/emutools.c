@@ -82,7 +82,6 @@ FILE *debug_fp = NULL;
 int chatty_xemu = 1;
 int sdl_default_win_x_size;
 int sdl_default_win_y_size;
-int user_scanlines_setting = 0;
 
 static int osd_enabled = 0, osd_available = 0, osd_xsize, osd_ysize, osd_fade_dec, osd_fade_end, osd_alpha_last;
 int osd_status = 0;
@@ -279,11 +278,6 @@ void xemu_set_screen_mode ( int setting )
 		xemu_set_full_screen(0);
 	}
 	SDL_RaiseWindow(sdl_win);
-}
-
-void xemu_set_scanlines( int setting )
-{
-	user_scanlines_setting = setting;
 }
 
 
