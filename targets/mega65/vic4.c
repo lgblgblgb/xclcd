@@ -1,7 +1,7 @@
 /* A work-in-progess MEGA65 (Commodore 65 clone origins) emulator
    Part of the Xemu project, please visit: https://github.com/lgblgblgb/xemu
    Copyright (C)2016-2021 LGB (Gábor Lénárt) <lgblgblgb@gmail.com>
-   Copyright (C)2020 Hernán Di Pietro <hernan.di.pietro@gmail.com>
+   Copyright (C)2020-2021 Hernán Di Pietro <hernan.di.pietro@gmail.com>
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -31,31 +31,31 @@ extern int in_hypervisor;
 static const char *iomode_names[4] = { "VIC2", "VIC3", "BAD!", "VIC4" };
 
 // (SDL) target texture rendering pointers
-static Uint32 *current_pixel;			// current_pixel pointer to the rendering target (one current_pixel: 32 bit)
-static Uint32 *pixel_end, *pixel_start;	// points to the end and start of the buffer
-static Uint32 *pixel_raster_start;		// first pixel of current raster
-Uint8 vic_registers[0x80];				// VIC-3 registers. It seems $47 is the last register. But to allow address the full VIC3 reg I/O space, we use $80 here
+static Uint32 *current_pixel;					// current_pixel pointer to the rendering target (one current_pixel: 32 bit)
+static Uint32 *pixel_end, *pixel_start;				// points to the end and start of the buffer
+static Uint32 *pixel_raster_start;				// first pixel of current raster
+Uint8 vic_registers[0x80];					// VIC-3 registers. It seems $47 is the last register. But to allow address the full VIC3 reg I/O space, we use $80 here
 int vic_iomode;							// VIC2/VIC3/VIC4 mode
 int force_fast;							// POKE 0,64 and 0,65 trick ...
-Uint8 vic_registers[0x80];				// VIC-4 registers
+Uint8 vic_registers[0x80];					// VIC-4 registers
 int vic_iomode;							// VIC2/VIC3/VIC4 mode
 int force_fast;							// POKE 0,64 and 0,65 trick ...
 int scanline;							// current scan line number
 int cpu_cycles_per_scanline;
-static int compare_raster;				// raster compare (9 bits width) data
+static int compare_raster;					// raster compare (9 bits width) data
 static int logical_raster = 0;
-static int interrupt_status;			// Interrupt status of VIC
-static int vic4_blink_phase = 0;		// blinking attribute helper, state.
-Uint8 c128_d030_reg;					// C128-like register can be only accessed in VIC-II mode but not in others, quite special!
-static Uint8 reg_d018_screen_addr = 0;     // Legacy VIC-II $D018 screen address register
-static int vic_hotreg_touched = 0; 		// If any "legacy" registers were touched
-static int vic4_sideborder_touched = 0;  // If side-border register were touched
-static int border_x_left= 0;			 // Side border left
-static int border_x_right= 0;			 // Side border right
-static int xcounter = 0, ycounter = 0;   // video counters
+static int interrupt_status;					// Interrupt status of VIC
+static int vic4_blink_phase = 0;				// blinking attribute helper, state.
+Uint8 c128_d030_reg;						// C128-like register can be only accessed in VIC-II mode but not in others, quite special!
+static Uint8 reg_d018_screen_addr = 0;				// Legacy VIC-II $D018 screen address register
+static int vic_hotreg_touched = 0;				// If any "legacy" registers were touched
+static int vic4_sideborder_touched = 0;				// If side-border register were touched
+static int border_x_left= 0;			 		// Side border left
+static int border_x_right= 0;			 		// Side border right
+static int xcounter = 0, ycounter = 0;				// video counters
 static int frame_counter = 0;
 static int char_row = 0, display_row = 0;
-static Uint8 bg_pixel_state[1024]; 		// See FOREGROUND_PIXEL and BACKGROUND_PIXEL constants
+static Uint8 bg_pixel_state[1024];				// See FOREGROUND_PIXEL and BACKGROUND_PIXEL constants
 static Uint8* screen_ram_current_ptr = NULL;
 static Uint8* colour_ram_current_ptr = NULL;
 int user_scanlines_setting = 0;
@@ -64,7 +64,7 @@ static int enable_bg_paint = 1;
 static int display_row_count = 0;
 static int max_rasters = PHYSICAL_RASTERS_DEFAULT;
 static int visible_area_height = SCREEN_HEIGHT_VISIBLE_DEFAULT;
-static int vicii_first_raster = 7;	// Default for NTSC
+static int vicii_first_raster = 7;				// Default for NTSC
 static Uint8 *bitplane_bank_p = main_ram;
 
 void vic4_render_char_raster();
@@ -74,15 +74,15 @@ static void (* vic4_raster_renderer_path)(void) = &vic4_render_char_raster;
 // VIC-IV Modeline Parameters
 // ----------------------------------------------------
 #define DISPLAY_HEIGHT			((max_rasters-1)-20)
-#define TEXT_HEIGHT_200  		400
-#define TEXT_HEIGHT_400  		400
-#define CHARGEN_Y_SCALE_200 	2
-#define CHARGEN_Y_SCALE_400 	1
+#define TEXT_HEIGHT_200			400
+#define TEXT_HEIGHT_400			400
+#define CHARGEN_Y_SCALE_200		2
+#define CHARGEN_Y_SCALE_400		1
 #define chargen_y_pixels 		0
-#define TOP_BORDERS_HEIGHT_200 	(DISPLAY_HEIGHT - TEXT_HEIGHT_200)
-#define TOP_BORDERS_HEIGHT_400 	(DISPLAY_HEIGHT - TEXT_HEIGHT_400)
-#define SINGLE_TOP_BORDER_200 	(TOP_BORDERS_HEIGHT_200 >> 1)
-#define SINGLE_TOP_BORDER_400 	(TOP_BORDERS_HEIGHT_400 >> 1)
+#define TOP_BORDERS_HEIGHT_200		(DISPLAY_HEIGHT - TEXT_HEIGHT_200)
+#define TOP_BORDERS_HEIGHT_400		(DISPLAY_HEIGHT - TEXT_HEIGHT_400)
+#define SINGLE_TOP_BORDER_200		(TOP_BORDERS_HEIGHT_200 >> 1)
+#define SINGLE_TOP_BORDER_400		(TOP_BORDERS_HEIGHT_400 >> 1)
 
 #define MAX(a,b) ((a)>(b)?(a):(b))
 
@@ -319,7 +319,7 @@ static void vic4_interpret_legacy_mode_registers()
 
 	REG_SCRNPTR_B0 = 0;
 	REG_SCRNPTR_B1 &= 0xC0;
-	REG_SCRNPTR_B1 |= REG_H640 ?  ((reg_d018_screen_addr & 14) << 2) : (reg_d018_screen_addr << 2);
+	REG_SCRNPTR_B1 |= REG_H640 ? ((reg_d018_screen_addr & 14) << 2) : (reg_d018_screen_addr << 2);
 	REG_SCRNPTR_B2 = 0;
 	vic_registers[0x63] &= 0b11110000;
 
@@ -338,7 +338,7 @@ static void vic4_interpret_legacy_mode_registers()
 		"VIC4: 16bit=%d, chrcount=%d, charstep=%d bytes, charscale=%d, vic_ii_first_raster=%d, ras_src=%d,"
 		"border yt=%d, yb=%d, xl=%d, xr=%d, textxpos=%d, textypos=%d,"
 		"screen_ram=$%06x, charset/bitmap=$%06x, sprite=$%06x" NL,
-		REG_16BITCHARSET ,   REG_CHRCOUNT,CHARSTEP_BYTES,REG_CHARXSCALE,
+		REG_16BITCHARSET, REG_CHRCOUNT, CHARSTEP_BYTES, REG_CHARXSCALE,
 		vicii_first_raster, REG_FNRST, BORDER_Y_TOP, BORDER_Y_BOTTOM, border_x_left, border_x_right, CHARGEN_X_START, CHARGEN_Y_START,
 		SCREEN_ADDR, CHARSET_ADDR, SPRITE_POINTER_ADDR
 	);
@@ -361,11 +361,11 @@ static void vic4_interpret_legacy_mode_registers()
 
 static const char vic_registers_internal_mode_names[] = {'4', '3', '2'};
 
-#define CASE_VIC_2(n) case n+0x100
-#define CASE_VIC_3(n) case n+0x080
-#define CASE_VIC_4(n) case n
-#define CASE_VIC_ALL(n) CASE_VIC_2(n): CASE_VIC_3(n): CASE_VIC_4(n)
-#define CASE_VIC_3_4(n) CASE_VIC_3(n): CASE_VIC_4(n)
+#define CASE_VIC_2(n)	case n+0x100
+#define CASE_VIC_3(n)	case n+0x080
+#define CASE_VIC_4(n)	case n
+#define CASE_VIC_ALL(n)	CASE_VIC_2(n): CASE_VIC_3(n): CASE_VIC_4(n)
+#define CASE_VIC_3_4(n)	CASE_VIC_3(n): CASE_VIC_4(n)
 
 
 /* - If HOTREG register is enabled, VICIV will trigger recalculation of border and such on next raster,
@@ -476,12 +476,12 @@ void vic_write_reg ( unsigned int addr, Uint8 data )
 			break;
 		CASE_VIC_3_4(0x31):
 			// (!) NOTE:
-			// According to Paul,  speed change should trigger "HOTREG" touched notification but no VIC legacy register "interpret"
+			// According to Paul, speed change should trigger "HOTREG" touched notification but no VIC legacy register "interpret"
 			// So probably we need a separate (cpu_speed_hotreg) var?
-			if ((vic_registers[0x31]  & 0xBF) ^ (data & 0xBF))
+			if ((vic_registers[0x31] & 0xBF) ^ (data & 0xBF))
 				vic_hotreg_touched = 1;
 
-			vic4_raster_renderer_path = ( (data & 0x10) == 0)  ? vic4_render_char_raster : vic4_render_bitplane_raster;
+			vic4_raster_renderer_path = ( (data & 0x10) == 0) ? vic4_render_char_raster : vic4_render_bitplane_raster;
 
 			vic_registers[0x31] = data;	// we need this work-around, since reg-write happens _after_ this switch statement, but machine_set_speed above needs it ...
 			machine_set_speed(0);
@@ -548,13 +548,13 @@ void vic_write_reg ( unsigned int addr, Uint8 data )
 		CASE_VIC_4(0x6C): CASE_VIC_4(0x6D): CASE_VIC_4(0x6E):
 			vic_registers[addr & 0x7F] = data;
 			// if (SPRITE_POINTER_ADDR > 384*1024) {
-			// 	DEBUGPRINT("WARNING !!! : SPRITE_POINTER_ADDR at $%08X exceeds 384K chip RAM!!!!  Current behavior is undefined." NL, SPRITE_POINTER_ADDR);
+			// 	DEBUGPRINT("WARNING !!! : SPRITE_POINTER_ADDR at $%08X exceeds 384K chip RAM!!!! Current behavior is undefined." NL, SPRITE_POINTER_ADDR);
 			// }
 
 			// DEBUGPRINT("SPRPTRADR/SPRPTRBNK Modified. Sprite Data Pointers now: " NL);
 
 			// for (int i = 0; i < 8; ++i) {
-			// 	const Uint8 *sprite_data_pointer =  main_ram + SPRITE_POINTER_ADDR + i * ((SPRITE_16BITPOINTER >> 7) + 1);
+			// 	const Uint8 *sprite_data_pointer = main_ram + SPRITE_POINTER_ADDR + i * ((SPRITE_16BITPOINTER >> 7) + 1);
 			// 	const Uint32 dataptr = SPRITE_16BITPOINTER ? 64 * ( ((*(sprite_data_pointer+1) << 8)) + (*(sprite_data_pointer))) : 64 * (*sprite_data_pointer);
 			// 	DEBUGPRINT("Sprite #%d data @ $%08X %s" NL , i, dataptr, dataptr > 384*1024 ? "!!! OUT OF 384K main RAM !!!" : "");
 			// }
@@ -892,7 +892,7 @@ static void vic4_do_sprites()
 
 			if (sprite_row_in_raster >= 0 && sprite_row_in_raster < spriteHeight) {
 				const int widthBytes = SPRITE_EXTWIDTH(sprnum) ? 8 : 3;
-				const Uint8 *sprite_data_pointer =  main_ram + SPRITE_POINTER_ADDR + sprnum * ((SPRITE_16BITPOINTER >> 7) + 1);
+				const Uint8 *sprite_data_pointer = main_ram + SPRITE_POINTER_ADDR + sprnum * ((SPRITE_16BITPOINTER >> 7) + 1);
 				const Uint32 sprite_data_addr = SPRITE_16BITPOINTER ?
 					64 * ((*(sprite_data_pointer + 1) << 8) | (*sprite_data_pointer))
 					: ((64 * (*sprite_data_pointer)) | ( ((~last_dd00_bits) & 0x3)) << 14);
@@ -949,7 +949,7 @@ static void vic4_render_mono_char_row ( Uint8 char_byte, int glyph_width, Uint8 
 static void vic4_render_multicolor_char_row ( Uint8 char_byte, int glyph_width, const Uint8 color_source[4] )
 {
 	for (float cx = 0; cx < glyph_width && xcounter < border_x_right; cx += char_x_step) {
-		const Uint8 bitsel =  2 * (int)(cx / 2);
+		const Uint8 bitsel = 2 * (int)(cx / 2);
 		const Uint8 bit_pair = (char_byte & (0x80 >> bitsel)) >> (6-bitsel) | (char_byte & (0x40 >> bitsel)) >> (6-bitsel);
 
 		Uint8 pixel = color_source[bit_pair];
@@ -1034,7 +1034,7 @@ void vic4_render_bitplane_raster()
 
 
 // The character rendering engine. Most features are shared between
-// all graphic modes.  Basically, the VIC-IV supports the following character
+// all graphic modes. Basically, the VIC-IV supports the following character
 // color modes:
 //
 // - Monochrome (Bg/Fg)
@@ -1056,13 +1056,13 @@ void vic4_render_char_raster()
 	const int adj_display_row = row_offset + display_row;
 	if (adj_display_row >= 0 && adj_display_row < display_row_count) {
 		const int char_row_offset = (BORDER_Y_TOP - CHARGEN_Y_START) % 8;
-		colour_ram_current_ptr = colour_ram + COLOUR_RAM_OFFSET + (adj_display_row  * CHARSTEP_BYTES);
-		screen_ram_current_ptr = main_ram + SCREEN_ADDR + (adj_display_row  * CHARSTEP_BYTES);
-		const Uint8 *row_data_base_addr = main_ram + (REG_BMM ?  VIC2_BITMAP_ADDR : get_charset_effective_addr());
+		colour_ram_current_ptr = colour_ram + COLOUR_RAM_OFFSET + (adj_display_row * CHARSTEP_BYTES);
+		screen_ram_current_ptr = main_ram + SCREEN_ADDR + (adj_display_row * CHARSTEP_BYTES);
+		const Uint8 *row_data_base_addr = main_ram + (REG_BMM ? VIC2_BITMAP_ADDR : get_charset_effective_addr());
 		// Account for Chargen X-displacement
 		for (Uint32 *p = current_pixel; p < current_pixel + (CHARGEN_X_START - border_x_left); ++p)
 			*p = palette[REG_SCREEN_COLOR];
-		current_pixel +=  (CHARGEN_X_START - border_x_left);
+		current_pixel += (CHARGEN_X_START - border_x_left);
 		xcounter += (CHARGEN_X_START - border_x_left);
 		const int xcounter_start = xcounter;
 		// Chargen starts here.
@@ -1098,7 +1098,7 @@ void vic4_render_char_raster()
 			if (SXA_VERTICAL_FLIP(color_data))
 				sel_char_row = 7 - char_row + char_row_offset;
 			if (REG_BMM)
-				char_byte = *(row_data_base_addr + display_row * 320 + 8 * line_char_index  + sel_char_row);
+				char_byte = *(row_data_base_addr + display_row * 320 + 8 * line_char_index + sel_char_row);
 			else
 				char_byte = *(row_data_base_addr + (char_id * 8) + sel_char_row);
 			if (SXA_HORIZONTAL_FLIP(color_data))
@@ -1241,7 +1241,7 @@ int vic4_snapshot_save_state ( const struct xemu_snapshot_definition_st *def )
 	if (a) return a;
 	memset(buffer, 0xFF, sizeof buffer);
 	/* saving state ... */
-	memcpy(buffer + 0x80,  vic_registers, 0x80);		//  $80 bytes
+	memcpy(buffer + 0x80, vic_registers, 0x80);	// $80 bytes
 	buffer[0x7F] = c128_d030_reg;
 	memcpy(buffer + 0x100                         , vic_palette_bytes_red,   NO_OF_PALETTE_REGS);
 	memcpy(buffer + 0x100 +     NO_OF_PALETTE_REGS, vic_palette_bytes_green, NO_OF_PALETTE_REGS);
