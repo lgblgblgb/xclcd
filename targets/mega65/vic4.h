@@ -20,20 +20,19 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
 #ifndef XEMU_MEGA65_VIC4_H_INCLUDED
 #define XEMU_MEGA65_VIC4_H_INCLUDED
 
-#include <SDL_types.h>
-
 #define VIC2_IOMODE	0
 #define VIC3_IOMODE	1
 #define VIC_BAD_IOMODE	2
 #define VIC4_IOMODE	3
 
-//
+#define PAL_LINE_FREQ
+#define NTSC_LINE_FREQ
+
 // Output window is fixed at 800x600 to support MegaPHONE, PAL-MEGA65
 // and NTSC_MEGA65 modes. Internally, the VIC-IV chip draws 800-pixel
 // wide buffers and traverses up to 526/624 physical rasters, as we do here.
 // The user can select a clipped borders view (called "normal borders") which shows
 // the real visible resolution of PAL (720x576) or NSTC(720x480).
-//
 
 #define SCREEN_WIDTH			800
 #define SCREEN_HEIGHT			600
@@ -55,7 +54,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
 // https://github.com/MEGA65/mega65-core/blob/138-hdmi-audio-27mhz/iomap.txt
 // ----------------------------------------------------
 // _Un  suffix indicates upper n bits of register
-//
+
 #define REG_EBM				(vic_registers[0x11] & 0x40)
 #define REG_MCM				(vic_registers[0x16] & 0x10)
 #define REG_BMM				(vic_registers[0x11] & 0x20)
@@ -119,10 +118,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
 #define REG_PAL_GREEN_BASE		(vic_registers[0x200])
 #define REG_PAL_BLUE_BASE		(vic_registers[0x300])
 
-
 // Helper macros for accessing multi-byte registers
 // and other similar functionality for convenience
-// -----------------------------------------------------
+
 #define PHYS_RASTER_COUNT		(REG_PALNTSC ? NTSC_PHYSICAL_RASTERS : PAL_PHYSICAL_RASTERS)
 #define SINGLE_SIDE_BORDER		(((Uint16)REG_SIDBDRWD) | (REG_SIDBDRWD_U5) << 8)
 #define BORDER_Y_TOP			(((Uint16)REG_TBRDPOS) | (REG_TBRDPOS_U4) << 8)
@@ -163,6 +161,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
 
 // "Super-Extended character attributes" (see https://github.com/MEGA65/mega65-core/blob/master/docs/viciv-modes.md)
 // cw is color-word (16-bit from Color RAM). sw is screen-ram-word (16bit from Screen RAM)
+
 #define SXA_TRIM_RIGHT_BITS012(sw)	((sw) >> 13)
 #define SXA_VERTICAL_FLIP(cw)		((cw) & 0x8000)
 #define SXA_HORIZONTAL_FLIP(cw)		((cw) & 0x4000)
@@ -175,7 +174,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
 
 
 // Multi-byte register write helpers
-// ---------------------------------------------------
+
 #define SET_11BIT_REG(basereg,x) do { \
 		vic_registers[((basereg)+1)] = (Uint8) ((((Uint16)(x)) & 0x700) >> 8); \
 		vic_registers[(basereg)] = (Uint8) ((Uint16)(x)) & 0x00FF; \
@@ -215,17 +214,18 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
 #define SET_CHARSTEP_BYTES(x)		SET_16BIT_REG(0x58,(x))
 
 // Pixel foreground/background indicator for aiding in sprite rendering
+
 #define FOREGROUND_PIXEL		1
 #define BACKGROUND_PIXEL		0
 
 // Review this! (VIC-II values)
+
 #define SPRITE_X_BASE_COORD		24
 #define SPRITE_Y_BASE_COORD		50
 #define SPRITE_X_UPPER_COORD		250
 #define SPRITE_Y_UPPER_COORD		344
 
 // Current state
-// -------------
 
 extern int   vic_iomode;
 extern int   scanline;

@@ -171,8 +171,8 @@ extern int xemu_post_init (
         void (*shutdown_callback)(void)         // callback function called on exit (can be nULL to not have any emulator specific stuff)
 );
 extern int xemu_change_display_mode(
-	int texture_x_size, int texture_y_size,	
-	int logical_x_size, int logical_y_size,	
+	int texture_x_size, int texture_y_size,
+	int logical_x_size, int logical_y_size,
 	int win_x_size, int win_y_size,
 	Uint32 pixel_format,
 	int locked_texture_update

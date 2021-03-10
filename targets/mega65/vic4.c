@@ -118,8 +118,6 @@ static inline void PIXEL_POINTER_FINAL_ASSERT ( Uint32 *p )
 #	define PIXEL_POINTER_FINAL_ASSERT(p)
 #endif
 
-// Lookup-based bit reversal.  (TODO: Move this to a proper file)
-
 static const Uint8 reverse_byte_table[] = {
 	0x00, 0x80, 0x40, 0xc0, 0x20, 0xa0, 0x60, 0xe0,	//0
 	0x10, 0x90, 0x50, 0xd0, 0x30, 0xb0, 0x70, 0xf0,	//8
@@ -159,7 +157,7 @@ static const Uint8 reverse_byte_table[] = {
 //{
 //	return reverse_byte_table[x];
 //}
-#define reverse_byte(x) reverse_byte_table[(x) & 0xFF];
+//#define reverse_byte(x) reverse_byte_table[(x) & 0xFF]
 
 
 void vic_init ( void )
@@ -293,8 +291,7 @@ static void vic4_interpret_legacy_mode_registers()
 			SET_CHARGEN_X_START(FRAME_H_FRONT + SINGLE_SIDE_BORDER + (2 * REG_VIC2_XSCROLL) - 2);
 	}
 	if (!REG_V400) {	// Standard mode (200-lines)
-		if (REG_RSEL)	// 25-row
-		{
+		if (REG_RSEL) {	// 25-row
 			SET_BORDER_Y_TOP(RASTER_CORRECTION + SINGLE_TOP_BORDER_200 - (2 * vicii_first_raster));
 			SET_BORDER_Y_BOTTOM(RASTER_CORRECTION + DISPLAY_HEIGHT - SINGLE_TOP_BORDER_200 - (2 * vicii_first_raster) - 1);
 			display_row_count = 25;
@@ -391,9 +388,7 @@ void vic_write_reg ( unsigned int addr, Uint8 data )
 			break;		// Sprite coordinates: simple write the VIC reg in all I/O modes.
 		CASE_VIC_ALL(0x11):
 			if (vic_registers[0x11] ^ data)
-			{
 				vic_hotreg_touched = 1;
-			}
 			compare_raster = (compare_raster & 0xFF) | ((data & 0x80) << 1);
 			DEBUGPRINT("VIC: compare raster is now %d" NL, compare_raster);
 			break;
@@ -407,9 +402,7 @@ void vic_write_reg ( unsigned int addr, Uint8 data )
 			break;
 		CASE_VIC_ALL(0x16):	// control-reg#2, we allow write even if non-used bits here
 			if (vic_registers[0x16] ^ data)
-			{
 				vic_hotreg_touched = 1;
-			}
 			break;
 		CASE_VIC_ALL(0x17):	// sprite-Y expansion
 			break;
@@ -418,8 +411,7 @@ void vic_write_reg ( unsigned int addr, Uint8 data )
 			// Reads are mapped to extended registers.
 			// So we just store the D018 Legacy Screen Address to be referenced elsewhere.
 			//
-			if (vic_registers[0x18] ^ data)
-			{
+			if (vic_registers[0x18] ^ data) {
 				REG_CHARPTR_B2 = 0;
 				REG_CHARPTR_B1 = (data & 14) << 2;
 				REG_CHARPTR_B0 = 0;
@@ -427,7 +419,6 @@ void vic_write_reg ( unsigned int addr, Uint8 data )
 				reg_d018_screen_addr = (data & 0xF0) >> 4;
 				vic_hotreg_touched = 1;
 			}
-
 			data &= 0xFE;
 			break;
 		CASE_VIC_ALL(0x19):
@@ -487,7 +478,6 @@ void vic_write_reg ( unsigned int addr, Uint8 data )
 			// (!) NOTE:
 			// According to Paul,  speed change should trigger "HOTREG" touched notification but no VIC legacy register "interpret"
 			// So probably we need a separate (cpu_speed_hotreg) var?
-			//
 			if ((vic_registers[0x31]  & 0xBF) ^ (data & 0xBF))
 				vic_hotreg_touched = 1;
 
@@ -790,7 +780,6 @@ static void vic4_draw_sprite_row_16color( int sprnum, int x_display_pos, const U
 {
 	const int totalBytes = SPRITE_EXTWIDTH(sprnum) ? 8 : 3;
 	const int palindexbase = sprnum * 16 + 128 * (SPRITE_BITPLANE_ENABLE(sprnum) >> sprnum);
-
 	for (int byte = 0; byte < totalBytes; ++byte) {
 		const Uint8 c0 = (*(row_data_ptr + byte)) >> 4;
 		const Uint8 c1 = (*(row_data_ptr + byte)) & 0xF;
@@ -805,7 +794,6 @@ static void vic4_draw_sprite_row_16color( int sprnum, int x_display_pos, const U
 				}
 			}
 		}
-
 		for (int p = 0; p < xscale && x_display_pos < border_x_right; ++p, ++x_display_pos) {
 			if (c1) {
 				if (
@@ -828,7 +816,6 @@ static void vic4_draw_sprite_row_multicolor ( int sprnum, int x_display_pos, con
 		for (int xbit = 0; xbit < 8; xbit += 2) {
 			const Uint8 p0 = *row_data_ptr & (0x80 >> xbit);
 			const Uint8 p1 = *row_data_ptr & (0x40 >> xbit);
-
 			Uint8 pixel = 0;	// TODO: See generated code -- use lookup instead of branch?
 			if (!p0 && p1)
 				pixel = SPRITE_MULTICOLOR_1;
@@ -1064,29 +1051,21 @@ void vic4_render_char_raster()
 {
 	int line_char_index = 0;
 	enable_bg_paint = 1;
-
 	// Account for negative Y-displacement (positive is taken into account in outer-loop)
-
 	const int row_offset = (BORDER_Y_TOP - CHARGEN_Y_START) / 8;
 	const int adj_display_row = row_offset + display_row;
-
 	if (adj_display_row >= 0 && adj_display_row < display_row_count) {
 		const int char_row_offset = (BORDER_Y_TOP - CHARGEN_Y_START) % 8;
 		colour_ram_current_ptr = colour_ram + COLOUR_RAM_OFFSET + (adj_display_row  * CHARSTEP_BYTES);
 		screen_ram_current_ptr = main_ram + SCREEN_ADDR + (adj_display_row  * CHARSTEP_BYTES);
-		const Uint8* row_data_base_addr = main_ram + (REG_BMM ?  VIC2_BITMAP_ADDR : get_charset_effective_addr());
-
+		const Uint8 *row_data_base_addr = main_ram + (REG_BMM ?  VIC2_BITMAP_ADDR : get_charset_effective_addr());
 		// Account for Chargen X-displacement
-
-		for(Uint32* p = current_pixel; p < current_pixel + (CHARGEN_X_START - border_x_left); ++p)
+		for (Uint32 *p = current_pixel; p < current_pixel + (CHARGEN_X_START - border_x_left); ++p)
 			*p = palette[REG_SCREEN_COLOR];
-
 		current_pixel +=  (CHARGEN_X_START - border_x_left);
 		xcounter += (CHARGEN_X_START - border_x_left);
 		const int xcounter_start = xcounter;
-
 		// Chargen starts here.
-
 		while (line_char_index < REG_CHRCOUNT) {
 			Uint16 color_data = *(colour_ram_current_ptr++);
 			Uint16 char_value = *(screen_ram_current_ptr++);
@@ -1105,36 +1084,26 @@ void vic4_render_char_raster()
 					continue;
 				}
 			}
-
 			// Background and foreground colors
-
 			const Uint8 char_fgcolor = color_data & 0xF;
 			const Uint8 vic3_attr = REG_VICIII_ATTRIBS && !REG_MCM ? (color_data >> 4) : 0;
 			const Uint16 char_id = REG_EBM ? (char_value & 0x3f) : char_value & 0x1fff; // up to 8192 characters (13-bit)
 			const Uint8 char_bgcolor = REG_EBM ? vic_registers[0x21 + ((char_value >> 6) & 3)] : REG_SCREEN_COLOR;
-
 			// Calculate character-width
-
 			Uint8 glyph_width_deduct = SXA_TRIM_RIGHT_BITS012(char_value) + (SXA_TRIM_RIGHT_BIT3(char_value) ? 8 : 0);
 			Uint8 glyph_width = (SXA_4BIT_PER_PIXEL(color_data) ? 16 : 8) - glyph_width_deduct;
-
 			// Default fetch from char mode.
 			Uint8 char_byte;
 			int sel_char_row = char_row + char_row_offset;
-
 			if (SXA_VERTICAL_FLIP(color_data))
 				sel_char_row = 7 - char_row + char_row_offset;
-
 			if (REG_BMM)
 				char_byte = *(row_data_base_addr + display_row * 320 + 8 * line_char_index  + sel_char_row);
 			else
 				char_byte = *(row_data_base_addr + (char_id * 8) + sel_char_row);
-
 			if (SXA_HORIZONTAL_FLIP(color_data))
-				char_byte = reverse_byte(char_byte);
-
+				char_byte = reverse_byte_table[char_byte];
 			// Render character cell row
-
 			if (SXA_4BIT_PER_PIXEL(color_data)) {	// 16-color character
 				// FIXME: TODO??
 			} else if (CHAR_IS256_COLOR(char_id)) {	// 256-color character
@@ -1166,14 +1135,11 @@ void vic4_render_char_raster()
 			line_char_index++;
 		}
 	}
-
 	if (++char_row > 7) {
 		char_row = 0;
 		display_row++;
 	}
-
 	// Fill screen color after chargen phase
-
 	while (xcounter++ < border_x_right)
 		*current_pixel++ = palette[REG_SCREEN_COLOR];
 }
@@ -1222,7 +1188,6 @@ int vic4_render_scanline()
 	// End of frame?
 	if (ycounter == max_rasters) {
 		vic4_reset_display_counters();
-
 		screen_ram_current_ptr = main_ram + SCREEN_ADDR;
 		colour_ram_current_ptr = colour_ram + COLOUR_RAM_OFFSET;
 		frame_counter++;

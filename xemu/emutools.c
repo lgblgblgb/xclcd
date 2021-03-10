@@ -90,7 +90,7 @@ static SDL_Texture *sdl_osdtex = NULL;
 static SDL_bool grabbed_mouse = SDL_FALSE, grabbed_mouse_saved = SDL_FALSE;
 static SDL_Rect viewport, * pViewport = NULL;
 
-// Benchmarking 
+// Benchmarking
 static unsigned int samples = 0;
 static int td_em_pct_sum = 0, td_em_pct_max = 0, td_em_pct_min = 9999999;
 
@@ -409,9 +409,9 @@ static void shutdown_emulator ( void )
 		debug_fp = NULL;
 	}
 	DEBUGPRINT(NL "-----------------------------------------------------------------------" NL
-	              "Performance Stats " NL 
+	              "Performance Stats " NL
 				  "CPU Time    Samples: %d   Min: %d   Max: %d   Avg: %.2f" NL
-				  "-----------------------------------------------------------------------" NL NL , 
+				  "-----------------------------------------------------------------------" NL NL ,
 				  samples, td_em_pct_min, td_em_pct_max, td_em_pct_sum / (double)samples);
 	DEBUGPRINT(NL "XEMU: good by(T)e." NL);
 }
@@ -643,7 +643,7 @@ int xemu_post_init (
 		sdl_ren = SDL_CreateRenderer(sdl_win, -1, 0);
 		if (!sdl_ren) {
 			ERROR_WINDOW("... and not even non-accelerated driver could be created, giving up: %s", SDL_GetError());
-			return 1;  
+			return 1;
 		} else {
 			INFO_WINDOW("Created non-accelerated driver. NOTE: it will severly affect the performance!");
 		}
@@ -674,7 +674,6 @@ int xemu_post_init (
 	while (n_colours--)
 		store_palette[n_colours] = SDL_MapRGBA(sdl_pix_fmt, colours[n_colours * 3], colours[n_colours * 3 + 1], colours[n_colours * 3 + 2], 0xFF);
 	/* SDL hints */
-	
 	SDL_SetHint(SDL_HINT_VIDEO_X11_NET_WM_PING, "0");				// disable WM ping, SDL dialog boxes makes WMs things emu is dead (?)
 	SDL_SetHint(SDL_HINT_RENDER_VSYNC, "0");					// disable vsync aligned screen rendering
 #ifdef XEMU_ARCH_WIN
@@ -716,15 +715,14 @@ int xemu_change_display_mode(
 	return 0;
 }
 
-void xemu_set_viewport(int left, int top, int right, int bottom, int adjust_window_size) 
+void xemu_set_viewport(int left, int top, int right, int bottom, int adjust_window_size)
 {
 	viewport.x = left;
 	viewport.y = top;
 	viewport.h = bottom - top;
 	viewport.w = right - left;
 	pViewport = &viewport;
- 			
-	SDL_RenderSetLogicalSize(sdl_ren, viewport.w, viewport.h);	
+	SDL_RenderSetLogicalSize(sdl_ren, viewport.w, viewport.h);
 	if (adjust_window_size) {
 		SDL_SetWindowSize(sdl_win, viewport.w, viewport.h);
 	}
