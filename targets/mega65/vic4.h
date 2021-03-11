@@ -26,11 +26,11 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
 #define VIC4_IOMODE	3
 
 // Horizontal sync frequencies (in Hertz) for NTSC and PAL video output of MEGA65. Must be float.
-#define PAL_LINE_FREQ	33500.0
-#define NTSC_LINE_FREQ	33500.0
+#define PAL_LINE_FREQ	31250.0
+#define NTSC_LINE_FREQ	31468.5
 // Frame times (in microseconds) for NTSC and PAL video output of MEGA65. Must be integer.
 #define PAL_FRAME_TIME	20000
-#define NTSC_FRAME_TIME	16667
+#define NTSC_FRAME_TIME	((int)(16683.35))
 
 // Output window is fixed at 800x600 to support MegaPHONE, PAL-MEGA65
 // and NTSC_MEGA65 modes. Internally, the VIC-IV chip draws 800-pixel

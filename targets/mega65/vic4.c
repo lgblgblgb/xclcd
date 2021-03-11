@@ -237,10 +237,10 @@ void vic4_open_frame_access()
 		videostd_name = new_name;
 #if 0
 		// TODO: recalculate cpu_cycles/line "constants" for each CPU speed modes (1, 2, 3.5, ~40 MHz)
-		cpu_cycles_per_line_c64  = (int)(cycles_at_1mhz);
-		cpu_cycles_per_line_c128 = (int)(cycles_at_1mhz * 2.0);
-		cpu_cycles_per_line_c65  = (int)(cycles_at_1mhz * 3.5);
-		cpu_cycles_per_line_m65  = (int)(cycles_at_1mhz * 40.0);	// FIXME: configdb.fastclock for newer Xemu! This is BAD since it can be other than 40!!!!
+		cpu_cycles_per_line_c64  = (int)roundf(cycles_at_1mhz);
+		cpu_cycles_per_line_c128 = (int)roundf(cycles_at_1mhz * 2.0);
+		cpu_cycles_per_line_c65  = (int)roundf(cycles_at_1mhz * 3.5);
+		cpu_cycles_per_line_m65  = (int)roundf(cycles_at_1mhz * 40.0);	// FIXME: configdb.fastclock for newer Xemu! This is BAD since it can be other than 40!!!!
 #endif
 	}
 	// FIXME: do we need this here? Ie, should this always bound to video mode change (only at frame boundary!) or not ...
@@ -604,8 +604,11 @@ void vic_write_reg ( unsigned int addr, Uint8 data )
 
 			break;
 		CASE_VIC_4(0x6F):
-			// Trigger video mode change.
 #if 0
+			// Trigger video mode change.
+			// LGB: this must be handled at opening new frame and NOT here.
+			// though I am still in doubts, what parts should be still handled
+			// here anyway, like this lines after #endif, see below
 			max_rasters = data & 0x80 ? PHYSICAL_RASTERS_NTSC : PHYSICAL_RASTERS_PAL;
 			visible_area_height = data & 0x80 ? SCREEN_HEIGHT_VISIBLE_NTSC : SCREEN_HEIGHT_VISIBLE_PAL;
 
