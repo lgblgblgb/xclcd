@@ -24,8 +24,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
 #include "vic4.h"
 #include "vic4_palette.h"
 #include "memory_mapper.h"
-#include "hypervisor.h"
-//#include <assert.h>
+#include <assert.h>
+
+extern int in_hypervisor;
 
 static const char *iomode_names[4] = { "VIC2", "VIC3", "BAD!", "VIC4" };
 
@@ -65,7 +66,7 @@ static Uint8 *bitplane_bank_p = main_ram;
 
 void vic4_render_char_raster();
 void vic4_render_bitplane_raster();
-static void (*vic4_raster_renderer_path)(void) = &vic4_render_char_raster;
+static void (* vic4_raster_renderer_path)(void) = &vic4_render_char_raster;
 
 // VIC-IV Modeline Parameters
 // ----------------------------------------------------
@@ -80,7 +81,7 @@ static void (*vic4_raster_renderer_path)(void) = &vic4_render_char_raster;
 #define SINGLE_TOP_BORDER_200		(TOP_BORDERS_HEIGHT_200 >> 1)
 #define SINGLE_TOP_BORDER_400		(TOP_BORDERS_HEIGHT_400 >> 1)
 
-//#define MAX(a,b) ((a)>(b)?(a):(b))
+#define MAX(a,b) ((a)>(b)?(a):(b))
 
 //#define CHECK_PIXEL_POINTER
 
@@ -149,6 +150,11 @@ static const Uint8 reverse_byte_table[] = {
 	0x1f, 0x9f, 0x5f, 0xdf, 0x3f, 0xbf, 0x7f, 0xff,
 };
 
+//static XEMU_INLINE Uint8 reverse_byte ( unsigned char x )
+//{
+//	return reverse_byte_table[x];
+//}
+//#define reverse_byte(x) reverse_byte_table[(x) & 0xFF]
 
 
 void vic_init ( void )
@@ -176,7 +182,6 @@ void vic_init ( void )
 }
 
 
-#if 0
 // This function allows to switch between NTSC/PAL on-the-fly (NTSC = 1. PAL = 0)
 void vic4_switch_display_mode(int ntsc)
 {
@@ -191,15 +196,7 @@ void vic4_switch_display_mode(int ntsc)
 		xemu_set_viewport(48, 32, SCREEN_WIDTH - 48, SCREEN_HEIGHT, 1);
 	vic4_open_frame_access();
 }
-#endif
 
-
-// --- these things are altered by vic4_open_frame_access() ONLY at every fame ONLY based on PAL or NTSC selection
-Uint8 videostd_id = 0xFF;			// 0=PAL, 1=NTSC [give some insane value by default to force the change at the fist frame after starting Xemu]
-const char *videostd_name = "<?>";		// PAL or NTSC, however initially is not yet set
-int videostd_frametime = NTSC_FRAME_TIME;	// time in microseconds for a frame to produce
-static const char NTSC_STD_NAME[] = "NTSC";
-static const char PAL_STD_NAME[] = "PAL";
 
 void vic4_open_frame_access()
 {
@@ -208,49 +205,6 @@ void vic4_open_frame_access()
 	pixel_end = current_pixel + (SCREEN_WIDTH * max_rasters);
 	if (tail_sdl)
 		FATAL("tail_sdl is not zero!");
-	// Now check the video mode: NTSC or PAL
-	// Though it can be changed any time, this kind of information really only can be applied
-	// at frame level. Thus we check here, if during the previous frame there was change
-	// and apply the video mode set for our just started new frame.
-	Uint8 new_mode = !!(vic_registers[0x6F] & 0x80);
-	if (XEMU_UNLIKELY(new_mode != videostd_id)) {
-		// We have video mode change!
-		videostd_id = new_mode;
-		const char *new_name;
-		float cycles_at_1mhz;	// 1MHz CPU cycles equalient of a scanline time
-		if (videostd_id) {
-			// --- NTSC ---
-			new_name = NTSC_STD_NAME;
-			videostd_frametime = NTSC_FRAME_TIME;
-			cycles_at_1mhz = 1000000.0 / NTSC_LINE_FREQ;
-			max_rasters = PHYSICAL_RASTERS_NTSC;
-			visible_area_height = SCREEN_HEIGHT_VISIBLE_NTSC;
-		} else {
-			// --- PAL ---
-			new_name = PAL_STD_NAME;
-			videostd_frametime = PAL_FRAME_TIME;
-			cycles_at_1mhz = 1000000.0 / PAL_LINE_FREQ;
-			max_rasters = PHYSICAL_RASTERS_PAL;
-			visible_area_height = SCREEN_HEIGHT_VISIBLE_PAL;
-		}
-		DEBUGPRINT("VIC: switching video standard from %s to %s (1MHz line cycle count is %f, frame time is %dusec)" NL, videostd_name, new_name, cycles_at_1mhz, videostd_frametime);
-		videostd_name = new_name;
-#if 0
-		// TODO: recalculate cpu_cycles/line "constants" for each CPU speed modes (1, 2, 3.5, ~40 MHz)
-		cpu_cycles_per_line_c64  = (int)(cycles_at_1mhz);
-		cpu_cycles_per_line_c128 = (int)(cycles_at_1mhz * 2.0);
-		cpu_cycles_per_line_c65  = (int)(cycles_at_1mhz * 3.5);
-		cpu_cycles_per_line_m65  = (int)(cycles_at_1mhz * 40.0);	// FIXME: configdb.fastclock for newer Xemu! This is BAD since it can be other than 40!!!!
-#endif
-	}
-	// FIXME: do we need this here? Ie, should this always bound to video mode change (only at frame boundary!) or not ...
-#if 0
-	vicii_first_raster = vic_registers[0x6F] & 0x1F;
-	if (!in_hypervisor) {
-		vic4_sideborder_touched = 1;
-		vic4_interpret_legacy_mode_registers();
-	}
-#endif
 }
 
 
@@ -605,7 +559,7 @@ void vic_write_reg ( unsigned int addr, Uint8 data )
 			break;
 		CASE_VIC_4(0x6F):
 			// Trigger video mode change.
-#if 0
+
 			max_rasters = data & 0x80 ? PHYSICAL_RASTERS_NTSC : PHYSICAL_RASTERS_PAL;
 			visible_area_height = data & 0x80 ? SCREEN_HEIGHT_VISIBLE_NTSC : SCREEN_HEIGHT_VISIBLE_PAL;
 
@@ -614,7 +568,7 @@ void vic_write_reg ( unsigned int addr, Uint8 data )
 				vic4_reset_display_counters();
 				vic4_switch_display_mode(data & 0x80);
 			}
-#endif
+
 			vicii_first_raster = data & 0x1F;
 
 			if (!in_hypervisor) {
@@ -1145,7 +1099,7 @@ void vic4_render_char_raster()
 			else
 				char_byte = *(row_data_base_addr + (char_id * 8) + sel_char_row);
 			if (SXA_HORIZONTAL_FLIP(color_data))
-				char_byte = reverse_byte_table[char_byte];	// LGB: I killed the function, and type-conv, as char_byte is byte, OK to index as-is
+				char_byte = reverse_byte_table[char_byte];
 			// Render character cell row
 			if (SXA_4BIT_PER_PIXEL(color_data)) {	// 16-color character
 				// FIXME: TODO??

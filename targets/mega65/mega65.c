@@ -458,8 +458,7 @@ static void update_emulator ( void )
 #ifdef HAS_UARTMON_SUPPORT
 	uartmon_update();
 #endif
-
-	xemu_timekeeping_delay(REG_PALNTSC ? 16667 : 20000);
+	xemu_timekeeping_delay(videostd_frametime);
 	// Ugly CIA trick to maintain realtime TOD in CIAs :)
 //	if (seconds_timer_trigger) {
 	const struct tm *t = xemu_get_localtime();

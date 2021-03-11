@@ -25,12 +25,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
 #define VIC_BAD_IOMODE	2
 #define VIC4_IOMODE	3
 
-// Horizontal sync frequencies (in Hertz) for NTSC and PAL video output of MEGA65. Must be float.
-#define PAL_LINE_FREQ	33500.0
-#define NTSC_LINE_FREQ	33500.0
-// Frame times (in microseconds) for NTSC and PAL video output of MEGA65. Must be integer.
-#define PAL_FRAME_TIME	20000
-#define NTSC_FRAME_TIME	16667
+#define PAL_LINE_FREQ
+#define NTSC_LINE_FREQ
 
 // Output window is fixed at 800x600 to support MegaPHONE, PAL-MEGA65
 // and NTSC_MEGA65 modes. Internally, the VIC-IV chip draws 800-pixel
@@ -117,6 +113,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
 #define REG_SPRPTR_B1			vic_registers[0x6D]
 #define REG_SPRPTR_B2			(vic_registers[0x6E] & 0x7F)
 #define REG_SCREEN_ROWS			vic_registers[0x7B]
+#define REG_PALNTSC			(vic_registers[0x6f] & 0x80)
 #define REG_PAL_RED_BASE		(vic_registers[0x100])
 #define REG_PAL_GREEN_BASE		(vic_registers[0x200])
 #define REG_PAL_BLUE_BASE		(vic_registers[0x300])
@@ -124,7 +121,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
 // Helper macros for accessing multi-byte registers
 // and other similar functionality for convenience
 
-//#define PHYS_RASTER_COUNT		(videostd_id ? NTSC_PHYSICAL_RASTERS : PAL_PHYSICAL_RASTERS)
+#define PHYS_RASTER_COUNT		(REG_PALNTSC ? NTSC_PHYSICAL_RASTERS : PAL_PHYSICAL_RASTERS)
 #define SINGLE_SIDE_BORDER		(((Uint16)REG_SIDBDRWD) | (REG_SIDBDRWD_U5) << 8)
 #define BORDER_Y_TOP			(((Uint16)REG_TBRDPOS) | (REG_TBRDPOS_U4) << 8)
 #define BORDER_Y_BOTTOM			(((Uint16)REG_BBRDPOS) | (REG_BBRDPOS_U4) << 8)
@@ -137,7 +134,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
 #define VIC2_BITMAP_ADDR		((Uint32)REG_CHARPTR_B0 | (REG_CHARPTR_B1<<8) | (REG_CHARPTR_B2 <<16))
 #define SPRITE_POINTER_ADDR		((Uint32)REG_SPRPTR_B0  | (REG_SPRPTR_B1<<8)  | (REG_SPRPTR_B2 <<16))
 #define COLOUR_RAM_OFFSET		((((Uint16)REG_COLPTR) | (REG_COLPTR_MSB) << 8))
-//#define IS_NTSC_MODE			(videostd_id)
+#define IS_NTSC_MODE			(REG_PALNTSC ^ 0x80)
 #define SCREEN_STEP			(((Uint16)REG_CHARSTEP) | (REG_CHARSTEP_U8) << 8)
 #define SPRITE_POS_Y(n)			(vic_registers[1 + (n)*2])
 #define SPRITE_POS_X(n)			(((Uint16)vic_registers[(n)*2]) | ( (vic_registers[0x10] & (1 << (n)) ? 0x100 : 0)))
@@ -237,9 +234,6 @@ extern int   cpu_cycles_per_scanline;
 extern int   vic2_16k_bank;
 extern int   force_fast;
 extern Uint8 c128_d030_reg;
-
-extern const char *videostd_name;
-extern int   videostd_frametime;
 
 extern int   user_scanlines_setting;
 
