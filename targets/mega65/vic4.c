@@ -63,6 +63,13 @@ static int visible_area_height = SCREEN_HEIGHT_VISIBLE_DEFAULT;
 static int vicii_first_raster = 7;				// Default for NTSC
 static Uint8 *bitplane_bank_p = main_ram;
 
+// --- these things are altered by vic4_open_frame_access() ONLY at every fame ONLY based on PAL or NTSC selection
+Uint8 videostd_id = 0xFF;			// 0=PAL, 1=NTSC [give some insane value by default to force the change at the fist frame after starting Xemu]
+const char *videostd_name = "<UNDEF>";		// PAL or NTSC, however initially is not yet set
+int videostd_frametime = NTSC_FRAME_TIME;	// time in microseconds for a frame to produce
+static const char NTSC_STD_NAME[] = "NTSC";
+static const char PAL_STD_NAME[] = "PAL";
+
 void vic4_render_char_raster();
 void vic4_render_bitplane_raster();
 static void (*vic4_raster_renderer_path)(void) = &vic4_render_char_raster;
@@ -194,12 +201,6 @@ void vic4_switch_display_mode(int ntsc)
 #endif
 
 
-// --- these things are altered by vic4_open_frame_access() ONLY at every fame ONLY based on PAL or NTSC selection
-Uint8 videostd_id = 0xFF;			// 0=PAL, 1=NTSC [give some insane value by default to force the change at the fist frame after starting Xemu]
-const char *videostd_name = "<?>";		// PAL or NTSC, however initially is not yet set
-int videostd_frametime = NTSC_FRAME_TIME;	// time in microseconds for a frame to produce
-static const char NTSC_STD_NAME[] = "NTSC";
-static const char PAL_STD_NAME[] = "PAL";
 
 void vic4_open_frame_access()
 {
@@ -378,13 +379,33 @@ static void vic4_interpret_legacy_mode_registers()
 
 	SET_COLORRAM_BASE(0);
 	DEBUGPRINT(
-		"VIC4: 16bit=%d, chrcount=%d, charstep=%d bytes, charscale=%d, vic_ii_first_raster=%d, ras_src=%d,"
-		"border yt=%d, yb=%d, xl=%d, xr=%d, textxpos=%d, textypos=%d,"
+		"VIC4: 16bit=%d, chrcount=%d, charstep=%d bytes, charscale=%d, vic_ii_first_raster=%d, ras_src=%d, "
+		"border yt=%d, yb=%d, xl=%d, xr=%d, textxpos=%d, textypos=%d, "
 		"screen_ram=$%06x, charset/bitmap=$%06x, sprite=$%06x" NL,
 		REG_16BITCHARSET, REG_CHRCOUNT, CHARSTEP_BYTES, REG_CHARXSCALE,
 		vicii_first_raster, REG_FNRST, BORDER_Y_TOP, BORDER_Y_BOTTOM, border_x_left, border_x_right, CHARGEN_X_START, CHARGEN_Y_START,
 		SCREEN_ADDR, CHARSET_ADDR, SPRITE_POINTER_ADDR
 	);
+}
+
+
+// FIXME: preliminary DAT support. For real, these should be mostly calculated at writing
+// DAT X/Y registers, bitplane selection registers etc (also true for the actual renderer!),
+// would give much better emulator performace. Though for now, that's a naive preliminary
+// way to support DAT at all!
+static XEMU_INLINE Uint8 *get_dat_addr ( unsigned int bpn )
+{
+	unsigned int x = vic_registers[0x3C];
+	unsigned int y = vic_registers[0x3D] + ((x << 1) & 0x100);
+	unsigned int h640 = (vic_registers[0x31] & 128);
+	x &= 0x7F;
+	//DEBUGPRINT("VIC-IV: DAT: accessing DAT for bitplane #%u at X,Y of %u,%u in H%u mode" NL, bpn, x, y, h640 ? 640 : 320);
+	return
+		bitplane_bank_p +						// MEGA65 feature (WANNABE feature!) to support relocatable bitplane bank by the DAT! (this is a pointer, not an integer!)
+		((vic_registers[0x33 + bpn] & (h640 ? 12 : 14)) << 12) +	// bitplane address
+		((bpn & 1) ? 0x10000 : 0) +					// odd/even bitplane selection
+		(((y >> 3) * (h640 ? 640 : 320)) + (x << 3) + (y & 7))		// position within the bitplane given by the X/Y info
+	;
 }
 
 
@@ -530,12 +551,15 @@ void vic_write_reg ( unsigned int addr, Uint8 data )
 			machine_set_speed(0);
 
 			vic4_calculate_char_x_step();
-			break;				//We did the write, but we need to trigger vichot_reg if should
+			break;				// we did the write, but we need to trigger vichot_reg if should
 
 		CASE_VIC_3_4(0x32): CASE_VIC_3_4(0x33): CASE_VIC_3_4(0x34): CASE_VIC_3_4(0x35): CASE_VIC_3_4(0x36): CASE_VIC_3_4(0x37): CASE_VIC_3_4(0x38):
 		CASE_VIC_3_4(0x39): CASE_VIC_3_4(0x3A): CASE_VIC_3_4(0x3B): CASE_VIC_3_4(0x3C): CASE_VIC_3_4(0x3D): CASE_VIC_3_4(0x3E): CASE_VIC_3_4(0x3F):
+			break;
+		// DAT read/write bitplanes port
 		CASE_VIC_3_4(0x40): CASE_VIC_3_4(0x41): CASE_VIC_3_4(0x42): CASE_VIC_3_4(0x43): CASE_VIC_3_4(0x44): CASE_VIC_3_4(0x45): CASE_VIC_3_4(0x46):
 		CASE_VIC_3_4(0x47):
+			*get_dat_addr(addr & 7) = data;	// write pixels via the DAT!
 			break;
 		/* --- NO MORE VIC-III REGS FROM HERE --- */
 		CASE_VIC_4(0x48): CASE_VIC_4(0x49): CASE_VIC_4(0x4A): CASE_VIC_4(0x4B):
@@ -555,7 +579,7 @@ void vic_write_reg ( unsigned int addr, Uint8 data )
 			break;
 		CASE_VIC_4(0x5A):
 			//DEBUGPRINT("WRITE $%04x CHARXSCALE: $%02x" NL, addr, data);
-			vic_registers[0x5A] = data;	// Write now and calculate step.
+			vic_registers[0x5A] = data;	// write now and calculate step
 			vic4_calculate_char_x_step();
 			return;
 		CASE_VIC_4(0x5B):
@@ -596,7 +620,7 @@ void vic_write_reg ( unsigned int addr, Uint8 data )
 
 			// DEBUGPRINT("SPRPTRADR/SPRPTRBNK Modified. Sprite Data Pointers now: " NL);
 
-			// for (int i = 0; i < 8; ++i) {
+			// for (int i = 0; i < 8; i++) {
 			// 	const Uint8 *sprite_data_pointer = main_ram + SPRITE_POINTER_ADDR + i * ((SPRITE_16BITPOINTER >> 7) + 1);
 			// 	const Uint32 dataptr = SPRITE_16BITPOINTER ? 64 * ( ((*(sprite_data_pointer+1) << 8)) + (*(sprite_data_pointer))) : 64 * (*sprite_data_pointer);
 			// 	DEBUGPRINT("Sprite #%d data @ $%08X %s" NL , i, dataptr, dataptr > 384*1024 ? "!!! OUT OF 384K main RAM !!!" : "");
@@ -747,8 +771,11 @@ Uint8 vic_read_reg ( int unsigned addr )
 			break;
 		CASE_VIC_3_4(0x32): CASE_VIC_3_4(0x33): CASE_VIC_3_4(0x34): CASE_VIC_3_4(0x35): CASE_VIC_3_4(0x36): CASE_VIC_3_4(0x37): CASE_VIC_3_4(0x38):
 		CASE_VIC_3_4(0x39): CASE_VIC_3_4(0x3A): CASE_VIC_3_4(0x3B): CASE_VIC_3_4(0x3C): CASE_VIC_3_4(0x3D): CASE_VIC_3_4(0x3E): CASE_VIC_3_4(0x3F):
+			break;
+		// DAT read/write bitplanes port
 		CASE_VIC_3_4(0x40): CASE_VIC_3_4(0x41): CASE_VIC_3_4(0x42): CASE_VIC_3_4(0x43): CASE_VIC_3_4(0x44): CASE_VIC_3_4(0x45): CASE_VIC_3_4(0x46):
 		CASE_VIC_3_4(0x47):
+			result = *get_dat_addr(addr & 7);	// read pixels via the DAT!
 			break;
 		/* --- NO MORE VIC-III REGS FROM HERE --- */
 		CASE_VIC_4(0x48): CASE_VIC_4(0x49): CASE_VIC_4(0x4A): CASE_VIC_4(0x4B): CASE_VIC_4(0x4C): CASE_VIC_4(0x4D): CASE_VIC_4(0x4E): CASE_VIC_4(0x4F):
@@ -826,10 +853,10 @@ static void vic4_draw_sprite_row_16color( int sprnum, int x_display_pos, const U
 {
 	const int totalBytes = SPRITE_EXTWIDTH(sprnum) ? 8 : 3;
 	const int palindexbase = sprnum * 16 + 128 * (SPRITE_BITPLANE_ENABLE(sprnum) >> sprnum);
-	for (int byte = 0; byte < totalBytes; ++byte) {
+	for (int byte = 0; byte < totalBytes; byte++) {
 		const Uint8 c0 = (*(row_data_ptr + byte)) >> 4;
 		const Uint8 c1 = (*(row_data_ptr + byte)) & 0xF;
-		for (int p = 0; p < xscale && x_display_pos < border_x_right; ++p, ++x_display_pos) {
+		for (int p = 0; p < xscale && x_display_pos < border_x_right; p++, x_display_pos++) {
 			if (c0) {
 				if (
 					x_display_pos >= border_x_left && (
@@ -840,7 +867,7 @@ static void vic4_draw_sprite_row_16color( int sprnum, int x_display_pos, const U
 				}
 			}
 		}
-		for (int p = 0; p < xscale && x_display_pos < border_x_right; ++p, ++x_display_pos) {
+		for (int p = 0; p < xscale && x_display_pos < border_x_right; p++, x_display_pos++) {
 			if (c1) {
 				if (
 					x_display_pos >= border_x_left && (
@@ -858,7 +885,7 @@ static void vic4_draw_sprite_row_16color( int sprnum, int x_display_pos, const U
 static void vic4_draw_sprite_row_multicolor ( int sprnum, int x_display_pos, const Uint8* row_data_ptr, int xscale )
 {
 	const int totalBytes = SPRITE_EXTWIDTH(sprnum) ? 8 : 3;
-	for (int byte = 0; byte < totalBytes; ++byte) {
+	for (int byte = 0; byte < totalBytes; byte++) {
 		for (int xbit = 0; xbit < 8; xbit += 2) {
 			const Uint8 p0 = *row_data_ptr & (0x80 >> xbit);
 			const Uint8 p1 = *row_data_ptr & (0x40 >> xbit);
@@ -870,7 +897,7 @@ static void vic4_draw_sprite_row_multicolor ( int sprnum, int x_display_pos, con
 			else if (p0 && p1)
 				pixel = SPRITE_MULTICOLOR_2;
 
-			for (int p = 0; p < xscale && x_display_pos < border_x_right; ++p, x_display_pos += 2) {
+			for (int p = 0; p < xscale && x_display_pos < border_x_right; p++, x_display_pos += 2) {
 				if (pixel) {
 					if (
 						x_display_pos >= border_x_left && (
@@ -897,10 +924,10 @@ static void vic4_draw_sprite_row_multicolor ( int sprnum, int x_display_pos, con
 static void vic4_draw_sprite_row_mono ( int sprnum, int x_display_pos, const Uint8 *row_data_ptr, int xscale )
 {
 	const int totalBytes = SPRITE_EXTWIDTH(sprnum) ? 8 : 3;
-	for (int byte = 0; byte < totalBytes; ++byte) {
-		for (int xbit = 0; xbit < 8; ++xbit) {
+	for (int byte = 0; byte < totalBytes; byte++) {
+		for (int xbit = 0; xbit < 8; xbit++) {
 			const Uint8 pixel = *row_data_ptr & (0x80 >> xbit);
-			for (int p = 0; p < xscale && x_display_pos < border_x_right; ++p, ++x_display_pos) {
+			for (int p = 0; p < xscale && x_display_pos < border_x_right; p++, x_display_pos++) {
 				if (
 					x_display_pos >= border_x_left &&
 					pixel && (
@@ -922,8 +949,8 @@ static void vic4_do_sprites()
 	// Fetch and sequence sprites.
 	//
 	// NOTE about Text/Bitmap Graphics Background/foreground semantics:
-	// In multicolor mode (MCM=1), the bit combinations “00” and “01” belong to the background
-	// and “10” and “11” to the foreground whereas in standard mode (MCM=0),
+	// In multicolor mode (MCM=1), the bit combinations "00" and "01" belong to the background
+	// and "10" and "11" to the foreground whereas in standard mode (MCM=0),
 	// cleared pixels belong to the background and set pixels to the foreground.
 	for (int sprnum = 7; sprnum >= 0; --sprnum) {
 		if (REG_SPRITE_ENABLE & (1 << sprnum)) {
@@ -1106,7 +1133,7 @@ void vic4_render_char_raster()
 		screen_ram_current_ptr = main_ram + SCREEN_ADDR + (adj_display_row * CHARSTEP_BYTES);
 		const Uint8 *row_data_base_addr = main_ram + (REG_BMM ? VIC2_BITMAP_ADDR : get_charset_effective_addr());
 		// Account for Chargen X-displacement
-		for (Uint32 *p = current_pixel; p < current_pixel + (CHARGEN_X_START - border_x_left); ++p)
+		for (Uint32 *p = current_pixel; p < current_pixel + (CHARGEN_X_START - border_x_left); p++)
 			*p = palette[REG_SCREEN_COLOR];
 		current_pixel += (CHARGEN_X_START - border_x_left);
 		xcounter += (CHARGEN_X_START - border_x_left);
@@ -1211,7 +1238,7 @@ int vic4_render_scanline()
 	} else {
 		// Top and bottom borders
 		if (ycounter < BORDER_Y_TOP || ycounter >= BORDER_Y_BOTTOM || !REG_DISPLAYENABLE) {
-			for (int i = 0; i < SCREEN_WIDTH; ++i)
+			for (int i = 0; i < SCREEN_WIDTH; i++)
 				*(current_pixel++) = palette[REG_BORDER_COLOR & 0xF];
 		} else {
 			// Render visible display first and render side-borders later to cover X-displaced
@@ -1223,10 +1250,10 @@ int vic4_render_scanline()
 			vic4_raster_renderer_path();
 			vic4_do_sprites();
 
-			for (Uint32 *p = pixel_raster_start; p < pixel_raster_start + border_x_left; ++p)
+			for (Uint32 *p = pixel_raster_start; p < pixel_raster_start + border_x_left; p++)
 				*p = palette[REG_BORDER_COLOR & 0xF];
 
-			for (Uint32 *p = current_pixel; p < current_pixel + border_x_right; ++p)
+			for (Uint32 *p = current_pixel; p < current_pixel + border_x_right; p++)
 				*p = palette[REG_BORDER_COLOR & 0xF];
 		}
 	}
