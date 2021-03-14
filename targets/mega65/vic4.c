@@ -162,7 +162,7 @@ void vic_init ( void )
 {
 	vic4_init_palette();
 	force_fast = 0;
-	// *** Init VIC3 registers and palette
+	// *** Init VIC4 registers and palette
 	vic_iomode = VIC2_IOMODE;
 	interrupt_status = 0;
 	scanline = 0;
@@ -267,7 +267,7 @@ static void vic4_interrupt_checker ( void )
 		vic_irq_new = 0;
 	}
 	if (vic_irq_old != vic_irq_new) {
-		DEBUG("VIC3: interrupt change %s -> %s" NL, vic_irq_old ? "active" : "inactive", vic_irq_new ? "active" : "inactive");
+		DEBUG("VIC4: interrupt change %s -> %s" NL, vic_irq_old ? "active" : "inactive", vic_irq_new ? "active" : "inactive");
 		if (vic_irq_new)
 			cpu65.irqLevel |= 2;
 		else
@@ -1124,13 +1124,10 @@ void vic4_render_char_raster()
 {
 	int line_char_index = 0;
 	enable_bg_paint = 1;
-	// Account for negative Y-displacement (positive is taken into account in outer-loop)
-	const int row_offset = (BORDER_Y_TOP - CHARGEN_Y_START) / 8;
-	const int adj_display_row = row_offset + display_row;
-	if (adj_display_row >= 0 && adj_display_row < display_row_count) {
-		const int char_row_offset = (BORDER_Y_TOP - CHARGEN_Y_START) % 8;
-		colour_ram_current_ptr = colour_ram + COLOUR_RAM_OFFSET + (adj_display_row * CHARSTEP_BYTES);
-		screen_ram_current_ptr = main_ram + SCREEN_ADDR + (adj_display_row * CHARSTEP_BYTES);
+
+	if (display_row >= 0 && display_row < display_row_count) {
+		colour_ram_current_ptr = colour_ram + COLOUR_RAM_OFFSET + (display_row * CHARSTEP_BYTES);
+		screen_ram_current_ptr = main_ram + SCREEN_ADDR + (display_row * CHARSTEP_BYTES);
 		const Uint8 *row_data_base_addr = main_ram + (REG_BMM ? VIC2_BITMAP_ADDR : get_charset_effective_addr());
 		// Account for Chargen X-displacement
 		for (Uint32 *p = current_pixel; p < current_pixel + (CHARGEN_X_START - border_x_left); p++)
@@ -1167,9 +1164,9 @@ void vic4_render_char_raster()
 			Uint8 glyph_width = (SXA_4BIT_PER_PIXEL(color_data) ? 16 : 8) - glyph_width_deduct;
 			// Default fetch from char mode.
 			Uint8 char_byte;
-			int sel_char_row = char_row + char_row_offset;
+			int sel_char_row = char_row;
 			if (SXA_VERTICAL_FLIP(color_data))
-				sel_char_row = 7 - char_row + char_row_offset;
+				sel_char_row = 7 - char_row;
 			if (REG_BMM)
 				char_byte = *(row_data_base_addr + display_row * 320 + 8 * line_char_index + sel_char_row);
 			else
@@ -1239,23 +1236,28 @@ int vic4_render_scanline()
 		// Top and bottom borders
 		if (ycounter < BORDER_Y_TOP || ycounter >= BORDER_Y_BOTTOM || !REG_DISPLAYENABLE) {
 			for (int i = 0; i < SCREEN_WIDTH; i++)
-				*(current_pixel++) = palette[REG_BORDER_COLOR & 0xF];
-		} else {
-			// Render visible display first and render side-borders later to cover X-displaced
-			// character generator if needed.
-
+				*(current_pixel++) = palette[REG_BORDER_COLOR];
+		}
+		if (ycounter >= CHARGEN_Y_START && ycounter < BORDER_Y_BOTTOM) {
+			// Render chargen area and render side-borders later to cover X-displaced
+			// character generator if needed.  Chargen area maybe covered by top/bottom
+			// borders also if y-offset applies.
 			xcounter += border_x_left;
 			current_pixel += border_x_left;
-
 			vic4_raster_renderer_path();
 			vic4_do_sprites();
-
-			for (Uint32 *p = pixel_raster_start; p < pixel_raster_start + border_x_left; p++)
-				*p = palette[REG_BORDER_COLOR & 0xF];
-
-			for (Uint32 *p = current_pixel; p < current_pixel + border_x_right; p++)
-				*p = palette[REG_BORDER_COLOR & 0xF];
 		}
+		// Paint screen color if positive y-offset (CHARGEN_Y_START > BORDER_Y_TOP)
+		if (ycounter >= BORDER_Y_TOP && ycounter < CHARGEN_Y_START) {
+			while (xcounter++ < border_x_right)
+				*current_pixel++ = palette[REG_SCREEN_COLOR];
+			// for (int i = 0; i < SCREEN_WIDTH - border_x_right; i++, current_pixel++)
+			//	*current_pixel = palette[REG_SCREEN_COLOR];
+		}
+		for (Uint32 *p = pixel_raster_start; p < pixel_raster_start + border_x_left; p++)
+			*p = palette[REG_BORDER_COLOR];
+		for (Uint32 *p = current_pixel; p < current_pixel + border_x_right; p++)
+			*p = palette[REG_BORDER_COLOR];
 	}
 	ycounter++;
 	// End of frame?
